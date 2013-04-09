@@ -92,29 +92,30 @@ def print_depends(depends):
         for p in v:
             print("  %s" % p)
 
-def analyze_by_file(patches):
-    """
-    Find dependencies in a list of patches by looking at the files they
-    change.
+class ByFileAnalyzer(object):
+    def analyze(self, patches):
+        """
+        Find dependencies in a list of patches by looking at the files they
+        change.
 
-    The algorithm is simple: Just keep a list of files changed, and mark
-    two patches as conflicting when they change the same file.
-    """
-    # Which patches touch a particular file. A dict of filename => list
-    # of patches
-    touches_file = collections.defaultdict(list)
+        The algorithm is simple: Just keep a list of files changed, and mark
+        two patches as conflicting when they change the same file.
+        """
+        # Which patches touch a particular file. A dict of filename => list
+        # of patches
+        touches_file = collections.defaultdict(list)
 
-    # Which patch depends on which other patches? A dict of
-    # patch => (list of dependency patches)
-    depends = collections.defaultdict(set)
+        # Which patch depends on which other patches? A dict of
+        # patch => (list of dependency patches)
+        depends = collections.defaultdict(set)
 
-    for patch in patches:
-        for f in patch.get_patch_set():
-            for other in touches_file[f.path]:
-                depends[patch].add(other)
+        for patch in patches:
+            for f in patch.get_patch_set():
+                for other in touches_file[f.path]:
+                    depends[patch].add(other)
 
-            touches_file[f.path].append(patch)
-    return depends
+                touches_file[f.path].append(patch)
+        return depends
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze patches for dependencies.')
@@ -131,8 +132,7 @@ def main():
     args = parser.parse_args()
 
     patches = args.changeset_type.get_changesets(args.arguments)
-
-    depends = analyze_by_file(patches)
+    depends = ByFileAnalyzer().analyze(patches)
 
     print_depends(depends)
 
