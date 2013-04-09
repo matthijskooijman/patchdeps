@@ -38,15 +38,15 @@ import subprocess
 import collections
 
 class Changeset():
-    def process(self, state):
+
+    def get_patch_set(self):
+        """
+        Returns this changeset as a unidiff.PatchSet.
+        """
+        # parse_unidiff expects an iterable that does not reset itself
+        # on every iteration, so we just wrap it in chain.
         diff = itertools.chain(self.get_diff())
-        patch = unidiff.parser.parse_unidiff(diff)
-
-        for f in patch:
-            for other in state.touches_file[f.path]:
-                state.depends[self].add(other)
-
-            state.touches_file[f.path].append(self)
+        return unidiff.parse_unidiff(diff)
 
     def get_diff(self):
         """
@@ -102,6 +102,17 @@ def print_depends(state):
         for p in v:
             print("  %s" % p)
 
+def analyze_by_file(state, patches):
+    # This is simple, just record what files are changed by this
+    # patch and conflict with any patches that modified the same
+    # files.
+    for patch in patches:
+        for f in patch.get_patch_set():
+            for other in state.touches_file[f.path]:
+                state.depends[patch].add(other)
+
+            state.touches_file[f.path].append(patch)
+
 def main():
     state = State()
 
@@ -120,8 +131,7 @@ def main():
 
     patches = args.changeset_type.get_changesets(args.arguments)
 
-    for patch in patches:
-        patch.process(state)
+    analyze_by_file(state, patches)
 
     print_depends(state)
 
