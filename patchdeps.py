@@ -86,36 +86,37 @@ class GitRev(Changeset):
             for line in lines:
                 yield GitRev(*line.split(' ', 1))
 
-class State:
-    def __init__(self):
-        # Which patches touch a particular file. A dict of filename => list
-        # of patches
-        self.touches_file = collections.defaultdict(list)
-
-        # Which patch depends on which other patches? A dict of
-        # patch => (list of dependency patches)
-        self.depends = collections.defaultdict(set)
-
-def print_depends(state):
-    for k, v in state.depends.items():
+def print_depends(depends):
+    for k, v in depends.items():
         print("%s depends on: " % k)
         for p in v:
             print("  %s" % p)
 
-def analyze_by_file(state, patches):
-    # This is simple, just record what files are changed by this
-    # patch and conflict with any patches that modified the same
-    # files.
+def analyze_by_file(patches):
+    """
+    Find dependencies in a list of patches by looking at the files they
+    change.
+
+    The algorithm is simple: Just keep a list of files changed, and mark
+    two patches as conflicting when they change the same file.
+    """
+    # Which patches touch a particular file. A dict of filename => list
+    # of patches
+    touches_file = collections.defaultdict(list)
+
+    # Which patch depends on which other patches? A dict of
+    # patch => (list of dependency patches)
+    depends = collections.defaultdict(set)
+
     for patch in patches:
         for f in patch.get_patch_set():
-            for other in state.touches_file[f.path]:
-                state.depends[patch].add(other)
+            for other in touches_file[f.path]:
+                depends[patch].add(other)
 
-            state.touches_file[f.path].append(patch)
+            touches_file[f.path].append(patch)
+    return depends
 
 def main():
-    state = State()
-
     parser = argparse.ArgumentParser(description='Analyze patches for dependencies.')
     types = parser.add_argument_group('type').add_mutually_exclusive_group(required=True)
     types.add_argument('--git', dest='changeset_type', action='store_const',
@@ -131,9 +132,9 @@ def main():
 
     patches = args.changeset_type.get_changesets(args.arguments)
 
-    analyze_by_file(state, patches)
+    depends = analyze_by_file(patches)
 
-    print_depends(state)
+    print_depends(depends)
 
 if __name__ == "__main__":
     main()
