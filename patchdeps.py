@@ -32,6 +32,7 @@
 import os
 import sys
 import unidiff
+import argparse
 import itertools
 import subprocess
 import collections
@@ -104,7 +105,20 @@ def print_depends(state):
 def main():
     state = State()
 
-    patches = GitRev.get_changesets(sys.argv[1:])
+    parser = argparse.ArgumentParser(description='Analyze patches for dependencies.')
+    types = parser.add_argument_group('type').add_mutually_exclusive_group(required=True)
+    types.add_argument('--git', dest='changeset_type', action='store_const',
+                   const=GitRev, default=None,
+                   help='Analyze a list of git revisions (non-option arguments are passed git git rev-list as-is')
+    parser.add_argument('arguments', metavar="ARG", nargs='*', help="""
+                        Specification of patches to analyze, depending
+                        on the type given. When --git is given, this is
+                        passed to git rev-list as-is (so use a valid
+                        revision range, like HEAD^^..HEAD).""")
+
+    args = parser.parse_args()
+
+    patches = args.changeset_type.get_changesets(args.arguments)
 
     for patch in patches:
         patch.process(state)
