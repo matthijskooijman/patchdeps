@@ -117,6 +117,99 @@ class ByFileAnalyzer(object):
                 touches_file[f.path].append(patch)
         return depends
 
+class ByLineAnalyzer(object):
+
+    class LineState(object):
+        """ State of a particular line in a file """
+        def __init__(self, lineno, line, changed_by):
+            self.lineno = lineno
+            self.line = line
+            self.changed_by = changed_by
+        def __str__(self):
+            return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
+
+    def analyze(self, patches):
+        """
+        Find dependencies in a list of patches by looking at the lines they
+        change.
+        """
+        # Per-file info on which patch last touched a particular line.
+        # A dict of file => list of LineState objects
+        state = collections.defaultdict(list)
+
+        # Which patch depends on which other patches?
+        # A dict of patch => (set of patches depended on)
+        self.depends = collections.defaultdict(set)
+
+        for patch in patches:
+            for f in patch.get_patch_set():
+                self.analyze_file(state, patch, f)
+
+        return self.depends
+
+    def analyze_file(self, state, patch, f):
+        # fstate[fstate_pos] describes the first line equal to or
+        # later than the next line to be processed. All linestates
+        # before fstate_pos are already processed and containg target
+        # line numbers, all states at or after fstate_pos still contain
+        # source line numbers.
+        self.fstate = state[f.path]
+        self.fstate_pos = 0
+
+        # Offset between source and target files at state_pos
+        self.offset = 0
+
+        for hunk in f:
+            self.analyze_hunk(patch, hunk)
+
+        self.line_state(-1)
+
+    def line_state(self, lineno):
+        """
+        Returns the state of the given (source) line number, if any.
+        Also takes care of updating the line states up to the given line
+        number using self.offset.
+
+        Passing lineno == -1 means to only update all states not yet
+        updated.
+        """
+        while (self.fstate_pos < len(self.fstate) and
+               (lineno == -1 or self.fstate[self.fstate_pos].lineno < lineno)):
+            self.fstate[self.fstate_pos].lineno += self.offset
+            self.fstate_pos += 1
+
+        if (self.fstate_pos < len(self.fstate) and
+            self.fstate[self.fstate_pos].lineno == lineno):
+                return self.fstate[self.fstate_pos]
+
+        return None
+
+    def analyze_hunk(self, patch, hunk):
+        for change in hunk.changes:
+            line_state = self.line_state(change.source_lineno_abs)
+
+            if change.action == LINE_TYPE_DELETE:
+                self.offset -= 1
+
+                if line_state:
+                    # This file was touched by another patch, add
+                    # dependency
+                    self.depends[patch].add(line_state.changed_by)
+
+                    # Forget about the state for this source line
+                    del self.fstate[self.fstate_pos]
+
+            elif change.action == LINE_TYPE_ADD:
+                # Mark this line as changed by this patch
+                s = self.LineState(lineno = change.target_lineno_abs,
+                                   line = change.target_line,
+                                   changed_by = patch)
+                self.fstate.insert(self.fstate_pos, s)
+                self.fstate_pos += 1
+                self.offset += 1
+
+            # Don't do anything for context lines
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze patches for dependencies.')
     types = parser.add_argument_group('type').add_mutually_exclusive_group(required=True)
@@ -128,11 +221,16 @@ def main():
                         on the type given. When --git is given, this is
                         passed to git rev-list as-is (so use a valid
                         revision range, like HEAD^^..HEAD).""")
+    parser.add_argument('--by-file', dest='analyzer', action='store_const',
+                        const=ByFileAnalyzer, default=ByLineAnalyzer, help="""
+                        Mark patches as conflicting when they change the
+                        same file (by default, they are conflicting when
+                        they change the same lines).""")
 
     args = parser.parse_args()
 
     patches = list(args.changeset_type.get_changesets(args.arguments))
-    depends = ByFileAnalyzer().analyze(patches)
+    depends = args.analyzer().analyze(patches)
 
     print_depends(patches, depends)
 
