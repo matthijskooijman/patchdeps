@@ -30,6 +30,7 @@
 import os
 import sys
 import argparse
+import textwrap
 import itertools
 import subprocess
 import collections
@@ -129,6 +130,29 @@ def print_depends_matrix(patches, depends):
                 line += " "
 
         print(line)
+
+def depends_dot(patches, depends):
+    """
+    Returns dot code for the dependency graph.
+    """
+    # Seems that fdp gives the best clustering if patches are often
+    # independent
+    res = """
+digraph ConflictMap {
+node [shape=box]
+layout=neato
+overlap=scale
+"""
+
+    for p in patches:
+        label = str(p).replace("\\", "\\\\").replace("\"", "\\\"")
+        label = "\\n".join(textwrap.wrap(label, 25))
+        res += """{} [label="{}"]\n""".format(p.number, label)
+        for dep in depends[p]:
+            res += """{} -> {}\n""".format(dep.number, p.number)
+    res += "}\n"
+
+    return res
 
 class ByFileAnalyzer(object):
     def analyze(self, args, patches):
@@ -333,6 +357,9 @@ def main():
                         Output a matrix with patches on both axis and
                         markings for dependencies. This is used if not
                         action is given.""")
+    actions.add_argument('--depends-dot', dest='actions', action='append_const',
+                        const='depends-dot', help="""
+                        Output dot format for a dependency graph.""")
 
     args = parser.parse_args()
     if not args.actions:
@@ -350,6 +377,9 @@ def main():
 
     if 'depends-matrix' in args.actions:
         print_depends_matrix(patches, depends)
+
+    if 'depends-dot' in args.actions:
+        print(depends_dot(patches, depends))
 
 if __name__ == "__main__":
     main()
