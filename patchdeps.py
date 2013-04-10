@@ -154,6 +154,14 @@ overlap=scale
 
     return res
 
+def show_xdot(dot):
+    """
+    Shows a given dot graph in xdot
+    """
+    p = subprocess.Popen(['xdot', '/dev/stdin'], stdin=subprocess.PIPE)
+    p.stdin.write(dot.encode('utf-8'))
+    p.stdin.close()
+
 class ByFileAnalyzer(object):
     def analyze(self, args, patches):
         """
@@ -360,6 +368,9 @@ def main():
     actions.add_argument('--depends-dot', dest='actions', action='append_const',
                         const='depends-dot', help="""
                         Output dot format for a dependency graph.""")
+    actions.add_argument('--depends-xdot', dest='actions', action='append_const',
+                        const='depends-xdot', help="""
+                        Show a dependencygraph using xdot (if available).""")
 
     args = parser.parse_args()
     if not args.actions:
@@ -380,6 +391,9 @@ def main():
 
     if 'depends-dot' in args.actions:
         print(depends_dot(patches, depends))
+
+    if 'depends-xdot' in args.actions:
+        show_xdot(depends_dot(patches, depends))
 
 if __name__ == "__main__":
     main()
