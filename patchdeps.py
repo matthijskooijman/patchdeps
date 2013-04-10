@@ -132,11 +132,10 @@ class ByFileAnalyzer(object):
 
                 touches_file[f.path].append(patch)
 
-        if args.blame:
+        if 'blame' in args.actions:
             for f, ps in touches_file.items():
                 patch = ps[-1]
                 print("{!s:80} {}".format(str(patch)[:80], f))
-            return None
 
         return depends
 
@@ -168,9 +167,8 @@ class ByLineAnalyzer(object):
             for f in patch.get_patch_set():
                 self.analyze_file(state, patch, f)
 
-        if args.blame:
+        if 'blame' in args.actions:
             self.print_blame(state)
-            return None
 
         return self.depends
 
@@ -298,12 +296,21 @@ def main():
                         Mark patches as conflicting when they change the
                         same file (by default, they are conflicting when
                         they change the same lines).""")
-    parser.add_argument('--blame', action='store_true', help="""
-                        In stead of outputting patch dependencies,
+    actions = parser.add_argument_group('actions')
+    actions.add_argument('--blame', dest='actions', action='append_const',
+                        const='blame', help="""
+                        Instead of outputting patch dependencies,
                         output for each line or file which patch changed
                         it last.""")
+    actions.add_argument('--depends-list', dest='actions', action='append_const',
+                        const='depends-list', help="""
+                        Output a list of each patch and the patches it
+                        depends on.  This is used if not action is
+                        given.""")
 
     args = parser.parse_args()
+    if not args.actions:
+        args.actions = ['depends-list']
 
     patches = list(args.changeset_type.get_changesets(args.arguments))
 
@@ -312,7 +319,7 @@ def main():
 
     depends = args.analyzer().analyze(args, patches)
 
-    if depends:
+    if 'depends-list' in args.actions:
         print_depends(patches, depends)
 
 if __name__ == "__main__":
