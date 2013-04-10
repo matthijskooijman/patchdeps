@@ -122,7 +122,10 @@ def print_depends_matrix(patches, depends):
             # For every later patch, print an "X" if it depends on this
             # one
             if p in depends[dep]:
-                line += "X"
+                if depends[dep][p] is True:
+                    line += "X"
+                else:
+                    line += depends[dep][p]
                 has_deps.add(dep)
             elif dep in has_deps:
                 line += "|"
@@ -177,12 +180,12 @@ class ByFileAnalyzer(object):
 
         # Which patch depends on which other patches? A dict of
         # patch => (list of dependency patches)
-        depends = collections.defaultdict(set)
+        depends = collections.defaultdict(dict)
 
         for patch in patches:
             for f in patch.get_patch_set():
                 for other in touches_file[f.path]:
-                    depends[patch].add(other)
+                    depends[patch][other] = True
 
                 touches_file[f.path].append(patch)
 
@@ -194,6 +197,11 @@ class ByFileAnalyzer(object):
         return depends
 
 class ByLineAnalyzer(object):
+    # Used if a patch changes a line changed by another patch
+    DEPEND_HARD = 'X'
+    # Used if a patch changes a line changed near a line changed by
+    # another patch
+    DEPEND_PROXIMITY = '*'
 
     class LineState(object):
         """ State of a particular line in a file """
@@ -214,8 +222,9 @@ class ByLineAnalyzer(object):
         state = collections.defaultdict(list)
 
         # Which patch depends on which other patches?
-        # A dict of patch => (set of patches depended on)
-        self.depends = collections.defaultdict(set)
+        # A dict of patch => (dict of patch depended on => type) Here,
+        # type is either DEPEND_HARD or DEPEND_PROXIMITY.
+        self.depends = collections.defaultdict(dict)
 
         for patch in patches:
             for f in patch.get_patch_set():
@@ -313,7 +322,7 @@ class ByLineAnalyzer(object):
                     # This file was touched by another patch, add
                     # dependency
                     if line_state.changed_by:
-                        self.depends[patch].add(line_state.changed_by)
+                        self.depends[patch][line_state.changed_by] = self.DEPEND_HARD
 
                     # Forget about the state for this source line
                     del self.fstate[self.fstate_pos]
