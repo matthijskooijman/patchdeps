@@ -83,11 +83,14 @@ class GitRev(Changeset):
             for line in lines:
                 yield GitRev(*line.split(' ', 1))
 
-def print_depends(depends):
-    for k, v in depends.items():
-        print("%s depends on: " % k)
-        for p in v:
-            print("  %s" % p)
+def print_depends(patches, depends):
+    for p in patches:
+        if not depends[p]:
+            continue
+        print("%s depends on: " % p)
+        for dep in patches:
+            if dep in depends[p]:
+                print("  %s" % dep)
 
 class ByFileAnalyzer(object):
     def analyze(self, patches):
@@ -128,10 +131,10 @@ def main():
 
     args = parser.parse_args()
 
-    patches = args.changeset_type.get_changesets(args.arguments)
+    patches = list(args.changeset_type.get_changesets(args.arguments))
     depends = ByFileAnalyzer().analyze(patches)
 
-    print_depends(depends)
+    print_depends(patches, depends)
 
 if __name__ == "__main__":
     main()
