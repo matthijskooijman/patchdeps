@@ -197,21 +197,6 @@ class ByFileAnalyzer(object):
         return depends
 
 class ByLineAnalyzer(object):
-    # Used if a patch changes a line changed by another patch
-    DEPEND_HARD = 'X'
-    # Used if a patch changes a line changed near a line changed by
-    # another patch
-    DEPEND_PROXIMITY = '*'
-
-    class LineState(object):
-        """ State of a particular line in a file """
-        def __init__(self, lineno, line, changed_by):
-            self.lineno = lineno
-            self.line = line
-            self.changed_by = changed_by
-        def __str__(self):
-            return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
-
     def analyze(self, args, patches):
         """
         Find dependencies in a list of patches by looking at the lines they
@@ -219,57 +204,57 @@ class ByLineAnalyzer(object):
         """
         # Per-file info on which patch last touched a particular line.
         # A dict of file => list of LineState objects
-        state = collections.defaultdict(list)
+        state = dict()
 
         # Which patch depends on which other patches?
         # A dict of patch => (dict of patch depended on => type) Here,
         # type is either DEPEND_HARD or DEPEND_PROXIMITY.
-        self.depends = collections.defaultdict(dict)
+        depends = collections.defaultdict(dict)
 
         for patch in patches:
             for f in patch.get_patch_set():
-                self.analyze_file(state, patch, f)
+                if not f.path in state:
+                    state[f.path] = ByLineFileAnalyzer(f.path)
+
+                state[f.path].analyze(depends, patch, f)
 
         if 'blame' in args.actions:
-            self.print_blame(state)
+            for a in state.values():
+                a.print_blame()
 
-        return self.depends
+        return depends
 
-    def print_blame(self, state):
-        for f, s in state.items():
-            print("{}:".format(f))
-            next_line = None
-            for line_state in s:
-                if next_line and line_state.lineno != next_line:
-                    for _ in range(3):
-                        print("{:50}    .".format(""))
 
-                patch = line_state.changed_by
-                # For lines that only appeared as context
-                if not patch:
-                    patch = ""
+class ByLineFileAnalyzer(object):
+    """
+    Helper class for the ByLineAnalyzer, that performs the analysis for
+    a specific file. Created once and called for multiple patches.
+    """
 
-                print("{:50} {:4} {}".format(str(patch)[:50],
-                                             line_state.lineno,
-                                             line_state.line))
-                next_line = line_state.lineno + 1
+    # Used if a patch changes a line changed by another patch
+    DEPEND_HARD = 'X'
+    # Used if a patch changes a line changed near a line changed by
+    # another patch
+    DEPEND_PROXIMITY = '*'
 
-            print()
 
-    def analyze_file(self, state, patch, f):
+    def __init__(self, fname):
+        self.fname = fname
+        self.fstate = []
+
+    def analyze(self, depends, patch, hunks):
         # fstate[fstate_pos] describes the first line equal to or
         # later than the next line to be processed. All linestates
         # before fstate_pos are already processed and containg target
         # line numbers, all states at or after fstate_pos still contain
         # source line numbers.
-        self.fstate = state[f.path]
         self.fstate_pos = 0
 
         # Offset between source and target files at state_pos
         self.offset = 0
 
-        for hunk in f:
-            self.analyze_hunk(patch, hunk)
+        for hunk in hunks:
+            self.analyze_hunk(depends, patch, hunk)
 
         self.line_state(-1)
 
@@ -293,7 +278,7 @@ class ByLineAnalyzer(object):
 
         return None
 
-    def analyze_hunk(self, patch, hunk):
+    def analyze_hunk(self, depends, patch, hunk):
         for change in hunk.changes:
             line_state = self.line_state(change.source_lineno_abs)
 
@@ -322,7 +307,7 @@ class ByLineAnalyzer(object):
                     # This file was touched by another patch, add
                     # dependency
                     if line_state.changed_by:
-                        self.depends[patch][line_state.changed_by] = self.DEPEND_HARD
+                        depends[patch][line_state.changed_by] = self.DEPEND_HARD
 
                     # Forget about the state for this source line
                     del self.fstate[self.fstate_pos]
@@ -337,6 +322,36 @@ class ByLineAnalyzer(object):
                 self.offset += 1
 
             # Don't do anything for context lines
+
+    def print_blame(self):
+        print("{}:".format(self.fname))
+        next_line = None
+        for line_state in self.fstate:
+            if next_line and line_state.lineno != next_line:
+                for _ in range(3):
+                    print("{:50}    .".format(""))
+
+            patch = line_state.changed_by
+            # For lines that only appeared as context
+            if not patch:
+                patch = ""
+
+            print("{:50} {:4} {}".format(str(patch)[:50],
+                                         line_state.lineno,
+                                         line_state.line))
+            next_line = line_state.lineno + 1
+
+        print()
+
+    class LineState(object):
+        """ State of a particular line in a file """
+        def __init__(self, lineno, line, changed_by):
+            self.lineno = lineno
+            self.line = line
+            self.changed_by = changed_by
+        def __str__(self):
+            return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze patches for dependencies.')
