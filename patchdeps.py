@@ -52,6 +52,23 @@ class Changeset():
         """
         raise NotImplementedError
 
+class PatchFile(Changeset):
+    def __init__(self, filename):
+        self.filename = filename
+
+    def get_diff(self):
+        return open(self.filename, 'r', encoding='utf-8')
+
+    @staticmethod
+    def get_changesets(args):
+        """
+        Generate Changeset objects, given patch filenamesk
+        """
+        for filename in args:
+            yield PatchFile(filename)
+
+    def __str__(self):
+        return os.path.basename(self.filename)
 
 class GitRev(Changeset):
     def __init__(self, rev, msg):
@@ -216,11 +233,16 @@ def main():
     types.add_argument('--git', dest='changeset_type', action='store_const',
                    const=GitRev, default=None,
                    help='Analyze a list of git revisions (non-option arguments are passed git git rev-list as-is')
+    types.add_argument('--patches', dest='changeset_type', action='store_const',
+                   const=PatchFile, default=None,
+                   help='Analyze a list of patch files (non-option arguments are patch filenames')
     parser.add_argument('arguments', metavar="ARG", nargs='*', help="""
                         Specification of patches to analyze, depending
                         on the type given. When --git is given, this is
                         passed to git rev-list as-is (so use a valid
-                        revision range, like HEAD^^..HEAD).""")
+                        revision range, like HEAD^^..HEAD). When
+                        --patches is given, these are filenames of patch
+                        files.""")
     parser.add_argument('--by-file', dest='analyzer', action='store_const',
                         const=ByFileAnalyzer, default=ByLineAnalyzer, help="""
                         Mark patches as conflicting when they change the
