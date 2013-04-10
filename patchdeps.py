@@ -26,27 +26,24 @@
 # perl script published at
 # http://blog.mozilla.org/sfink/2012/01/05/patch-queue-dependencies/
 #
-# This program requires the unidiff library to work, which can be found
-# at https://github.com/matiasb/python-unidiff
 
 import os
 import sys
-import unidiff
 import argparse
 import itertools
 import subprocess
 import collections
 
+from parser import parse_diff
+from parser import LINE_TYPE_ADD, LINE_TYPE_DELETE, LINE_TYPE_CONTEXT
+
 class Changeset():
 
     def get_patch_set(self):
         """
-        Returns this changeset as a unidiff.PatchSet.
+        Returns this changeset as a list of PatchedFiles.
         """
-        # parse_unidiff expects an iterable that does not reset itself
-        # on every iteration, so we just wrap it in chain.
-        diff = itertools.chain(self.get_diff())
-        return unidiff.parse_unidiff(diff)
+        return parse_diff(self.get_diff())
 
     def get_diff(self):
         """
