@@ -38,7 +38,6 @@ from parser import parse_diff
 from parser import LINE_TYPE_ADD, LINE_TYPE_DELETE, LINE_TYPE_CONTEXT
 
 class Changeset():
-
     def get_patch_set(self):
         """
         Returns this changeset as a list of PatchedFiles.
@@ -110,7 +109,7 @@ def print_depends(patches, depends):
                 print("  %s" % dep)
 
 class ByFileAnalyzer(object):
-    def analyze(self, patches):
+    def analyze(self, args, patches):
         """
         Find dependencies in a list of patches by looking at the files they
         change.
@@ -132,6 +131,13 @@ class ByFileAnalyzer(object):
                     depends[patch].add(other)
 
                 touches_file[f.path].append(patch)
+
+        if args.blame:
+            for f, ps in touches_file.items():
+                patch = ps[-1]
+                print("{!s:80} {}".format(str(patch)[:80], f))
+            return None
+
         return depends
 
 class ByLineAnalyzer(object):
@@ -145,7 +151,7 @@ class ByLineAnalyzer(object):
         def __str__(self):
             return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
 
-    def analyze(self, patches):
+    def analyze(self, args, patches):
         """
         Find dependencies in a list of patches by looking at the lines they
         change.
@@ -162,7 +168,28 @@ class ByLineAnalyzer(object):
             for f in patch.get_patch_set():
                 self.analyze_file(state, patch, f)
 
+        if args.blame:
+            self.print_blame(state)
+            return None
+
         return self.depends
+
+    def print_blame(self, state):
+        for f, s in state.items():
+            print("{}:".format(f))
+            next_line = None
+            for line_state in s:
+                if next_line and line_state.lineno != next_line:
+                    for _ in range(3):
+                        print("{:50}    .".format(""))
+
+                patch = line_state.changed_by
+                print("{:50} {:4} {}".format(str(patch)[:50],
+                                             line_state.lineno,
+                                             line_state.line))
+                next_line = line_state.lineno + 1
+
+            print()
 
     def analyze_file(self, state, patch, f):
         # fstate[fstate_pos] describes the first line equal to or
@@ -258,13 +285,22 @@ def main():
                         Mark patches as conflicting when they change the
                         same file (by default, they are conflicting when
                         they change the same lines).""")
+    parser.add_argument('--blame', action='store_true', help="""
+                        In stead of outputting patch dependencies,
+                        output for each line or file which patch changed
+                        it last.""")
 
     args = parser.parse_args()
 
     patches = list(args.changeset_type.get_changesets(args.arguments))
-    depends = args.analyzer().analyze(patches)
 
-    print_depends(patches, depends)
+    for i, p in enumerate(patches):
+        p.number = i
+
+    depends = args.analyzer().analyze(args, patches)
+
+    if depends:
+        print_depends(patches, depends)
 
 if __name__ == "__main__":
     main()
