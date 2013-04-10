@@ -184,6 +184,10 @@ class ByLineAnalyzer(object):
                         print("{:50}    .".format(""))
 
                 patch = line_state.changed_by
+                # For lines that only appeared as context
+                if not patch:
+                    patch = ""
+
                 print("{:50} {:4} {}".format(str(patch)[:50],
                                              line_state.lineno,
                                              line_state.line))
@@ -242,13 +246,22 @@ class ByLineAnalyzer(object):
                     sys.stderr.write("%s\n\n" % change.source_line)
                     sys.exit(1)
 
-            if change.action == LINE_TYPE_DELETE:
+            if change.action == LINE_TYPE_CONTEXT:
+                if not line_state:
+                    s = self.LineState(lineno = change.target_lineno_abs,
+                                       line = change.target_line,
+                                       changed_by = None)
+                    self.fstate.insert(self.fstate_pos, s)
+                    self.fstate_pos += 1
+
+            elif change.action == LINE_TYPE_DELETE:
                 self.offset -= 1
 
                 if line_state:
                     # This file was touched by another patch, add
                     # dependency
-                    self.depends[patch].add(line_state.changed_by)
+                    if line_state.changed_by:
+                        self.depends[patch].add(line_state.changed_by)
 
                     # Forget about the state for this source line
                     del self.fstate[self.fstate_pos]
