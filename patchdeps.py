@@ -57,7 +57,10 @@ class PatchFile(Changeset):
         self.filename = filename
 
     def get_diff(self):
-        return open(self.filename, 'r', encoding='utf-8')
+        f = open(self.filename, 'r', encoding='utf-8')
+        # Iterating over a file gives separate lines, with newlines
+        # included. We want those stripped off
+        return map(lambda x: x.rstrip('\n'), f)
 
     @staticmethod
     def get_changesets(args):
@@ -240,15 +243,19 @@ class ByLineFileAnalyzer(object):
 
     def __init__(self, fname):
         self.fname = fname
-        self.fstate = []
+        # Keep two view on our line state, so we can both iterate them
+        # in order and do quick lookups
+        self.line_list = []
+        self.line_dict = {}
 
     def analyze(self, depends, patch, hunks):
-        # fstate[fstate_pos] describes the first line equal to or
-        # later than the next line to be processed. All linestates
-        # before fstate_pos are already processed and containg target
-        # line numbers, all states at or after fstate_pos still contain
-        # source line numbers.
-        self.fstate_pos = 0
+        # This is the index in line_list of the first line state that
+        # still uses source line numbers
+        self.to_update_idx = 0
+
+        # The index in line_list of the last line processed (i.e,
+        # matched against a diff line)
+        self.processed_idx = -1
 
         # Offset between source and target files at state_pos
         self.offset = 0
@@ -256,77 +263,110 @@ class ByLineFileAnalyzer(object):
         for hunk in hunks:
             self.analyze_hunk(depends, patch, hunk)
 
-        self.line_state(-1)
+        # Pretend we processed the entire list, so update_offset can
+        # update the line numbers of any remaining (unchanged) lines
+        # after the last hunk in this patch
+        self.processed_idx = len(self.line_list)
+        self.update_offset(0)
 
-    def line_state(self, lineno):
+    def line_state(self, lineno, create):
         """
-        Returns the state of the given (source) line number, if any.
-        Also takes care of updating the line states up to the given line
-        number using self.offset.
-
-        Passing lineno == -1 means to only update all states not yet
-        updated.
+        Returns the state of the given (source) line number, creating a
+        new empty state if it is not yet present and create is True.
         """
-        while (self.fstate_pos < len(self.fstate) and
-               (lineno == -1 or self.fstate[self.fstate_pos].lineno < lineno)):
-            self.fstate[self.fstate_pos].lineno += self.offset
-            self.fstate_pos += 1
 
-        if (self.fstate_pos < len(self.fstate) and
-            self.fstate[self.fstate_pos].lineno == lineno):
-                return self.fstate[self.fstate_pos]
+        self.processed_idx += 1
+        for state in self.line_list[self.processed_idx:]:
+            # Found it, return
+            if state.lineno == lineno:
+                return state
+            elif state.lineno < lineno:
+                # We're already passed this one, continue looking
+                self.processed_idx += 1
+                continue
+            else:
+                # It's not in there, stop looking
+                break
+                enumerate
 
-        return None
+        if not create:
+            return None
+
+        # We don't have state for this particular line, insert a
+        # new empty state
+        state = self.LineState(lineno = lineno)
+        self.line_list.insert(self.processed_idx, state)
+        return state
+
+    def update_offset(self, amount):
+        """
+        Update the offset between target and source lines by the
+        specified amount.
+
+        Takes care of updating the line states of all processed lines
+        (up to but excluding self.processed_idx) with the old offset
+        before changing it.
+        """
+        for state in self.line_list[self.to_update_idx:self.processed_idx]:
+            state.lineno += self.offset
+            self.to_update_idx += 1
+
+        self.offset += amount
 
     def analyze_hunk(self, depends, patch, hunk):
+        #print('\n'.join(map(str, self.line_list)))
+        #print('--')
         for change in hunk.changes:
-            line_state = self.line_state(change.source_lineno_abs)
+            if change.action == LINE_TYPE_ADD:
+                self.line_state(change.source_lineno_abs, create = False)
+                self.update_offset(1)
 
-            if (change.source_line is not None and line_state and
-                change.source_line != line_state.line):
-                    sys.stderr.write("While processing %s\n" % patch)
-                    sys.stderr.write("Warning: patch does not apply cleanly! Results are probably wrong!\n")
-                    sys.stderr.write("According to previous patches, line %s is:\n" % change.source_lineno_abs)
-                    sys.stderr.write("%s\n" % line_state.line)
-                    sys.stderr.write("But according to %s, it should be:\n" % patch)
-                    sys.stderr.write("%s\n\n" % change.source_line)
-                    sys.exit(1)
+                # Mark this line as changed by this patch
+                s = self.LineState(lineno = change.target_lineno_abs,
+                                   line = change.target_line,
+                                   changed_by = patch)
+                self.line_list.insert(self.processed_idx, s)
+                assert self.processed_idx == self.to_update_idx, "Not everything updated?" 
 
-            if change.action == LINE_TYPE_CONTEXT:
-                if not line_state:
-                    s = self.LineState(lineno = change.target_lineno_abs,
-                                       line = change.target_line,
-                                       changed_by = None)
-                    self.fstate.insert(self.fstate_pos, s)
-                    self.fstate_pos += 1
+                # Since we insert this using the target line number, it
+                # doesn't need to be updated again
+                self.to_update_idx += 1
+            else:
+                line_state = self.line_state(change.source_lineno_abs, create = True)
 
-            elif change.action == LINE_TYPE_DELETE:
-                self.offset -= 1
+                if (line_state.line is not None and
+                    change.source_line != line_state.line):
+                        sys.stderr.write("While processing %s\n" % patch)
+                        sys.stderr.write("Warning: patch does not apply cleanly! Results are probably wrong!\n")
+                        sys.stderr.write("According to previous patches, line %s is:\n" % change.source_lineno_abs)
+                        sys.stderr.write("%s\n" % line_state.line)
+                        sys.stderr.write("But according to %s, it should be:\n" % patch)
+                        sys.stderr.write("%s\n\n" % change.source_line)
+                        sys.exit(1)
+                if change.action == LINE_TYPE_CONTEXT:
+                    # For context lines, only remember the line contents
+                    if line_state.line is None:
+                        line_state .line = change.target_line
+                elif change.action == LINE_TYPE_DELETE:
+                    self.update_offset(-1)
 
-                if line_state:
                     # This file was touched by another patch, add
                     # dependency
                     if line_state.changed_by:
                         depends[patch][line_state.changed_by] = self.DEPEND_HARD
 
                     # Forget about the state for this source line
-                    del self.fstate[self.fstate_pos]
+                    del self.line_list[self.processed_idx]
+                    self.processed_idx -= 1
 
-            elif change.action == LINE_TYPE_ADD:
-                # Mark this line as changed by this patch
-                s = self.LineState(lineno = change.target_lineno_abs,
-                                   line = change.target_line,
-                                   changed_by = patch)
-                self.fstate.insert(self.fstate_pos, s)
-                self.fstate_pos += 1
-                self.offset += 1
-
-            # Don't do anything for context lines
 
     def print_blame(self):
         print("{}:".format(self.fname))
         next_line = None
-        for line_state in self.fstate:
+        for line_state in self.line_list:
+            if line_state.line is None:
+                continue
+
             if next_line and line_state.lineno != next_line:
                 for _ in range(3):
                     print("{:50}    .".format(""))
@@ -345,10 +385,11 @@ class ByLineFileAnalyzer(object):
 
     class LineState(object):
         """ State of a particular line in a file """
-        def __init__(self, lineno, line, changed_by):
+        def __init__(self, lineno, line = None, changed_by = None):
             self.lineno = lineno
             self.line = line
             self.changed_by = changed_by
+
         def __str__(self):
             return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
 
