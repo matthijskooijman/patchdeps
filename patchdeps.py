@@ -205,6 +205,16 @@ class ByLineAnalyzer(object):
         for change in hunk.changes:
             line_state = self.line_state(change.source_lineno_abs)
 
+            if (change.source_line is not None and line_state and
+                change.source_line != line_state.line):
+                    sys.stderr.write("While processing %s\n" % patch)
+                    sys.stderr.write("Warning: patch does not apply cleanly! Results are probably wrong!\n")
+                    sys.stderr.write("According to previous patches, line %s is:\n" % change.source_lineno_abs)
+                    sys.stderr.write("%s\n" % line_state.line)
+                    sys.stderr.write("But according to %s, it should be:\n" % patch)
+                    sys.stderr.write("%s\n\n" % change.source_line)
+                    sys.exit(1)
+
             if change.action == LINE_TYPE_DELETE:
                 self.offset -= 1
 
