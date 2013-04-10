@@ -108,6 +108,28 @@ def print_depends(patches, depends):
             if dep in depends[p]:
                 print("  %s" % dep)
 
+def print_depends_matrix(patches, depends):
+    # Which patches have at least one dependency drawn (and thus
+    # need lines from then on)?
+    has_deps = set()
+    for p in patches:
+        line = str(p)[:80] + "  "
+        line += "-" * (84 - len(line) + p.number)
+        line += "'"
+
+        for dep in patches[p.number + 1:]:
+            # For every later patch, print an "X" if it depends on this
+            # one
+            if p in depends[dep]:
+                line += "X"
+                has_deps.add(dep)
+            elif dep in has_deps:
+                line += "|"
+            else:
+                line += " "
+
+        print(line)
+
 class ByFileAnalyzer(object):
     def analyze(self, args, patches):
         """
@@ -305,12 +327,16 @@ def main():
     actions.add_argument('--depends-list', dest='actions', action='append_const',
                         const='depends-list', help="""
                         Output a list of each patch and the patches it
-                        depends on.  This is used if not action is
-                        given.""")
+                        depends on.""")
+    actions.add_argument('--depends-matrix', dest='actions', action='append_const',
+                        const='depends-matrix', help="""
+                        Output a matrix with patches on both axis and
+                        markings for dependencies. This is used if not
+                        action is given.""")
 
     args = parser.parse_args()
     if not args.actions:
-        args.actions = ['depends-list']
+        args.actions = ['depends-matrix']
 
     patches = list(args.changeset_type.get_changesets(args.arguments))
 
@@ -321,6 +347,9 @@ def main():
 
     if 'depends-list' in args.actions:
         print_depends(patches, depends)
+
+    if 'depends-matrix' in args.actions:
+        print_depends_matrix(patches, depends)
 
 if __name__ == "__main__":
     main()
