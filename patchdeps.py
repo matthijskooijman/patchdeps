@@ -137,6 +137,9 @@ def print_depends_matrix(patches, depends):
 
         print(line)
 
+def dot_escape_string(s):
+    return s.replace("\\", "\\\\").replace("\"", "\\\"")
+
 def depends_dot(patches, depends):
     """
     Returns dot code for the dependency graph.
@@ -151,7 +154,7 @@ overlap=scale
 """
 
     for p in patches:
-        label = str(p).replace("\\", "\\\\").replace("\"", "\\\"")
+        label = dot_escape_string(str(p))
         label = "\\n".join(textwrap.wrap(label, 25))
         res += """{} [label="{}"]\n""".format(p.number, label)
         for dep in depends[p]:
