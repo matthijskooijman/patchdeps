@@ -38,6 +38,10 @@ import collections
 from parser import parse_diff
 from parser import LINE_TYPE_ADD, LINE_TYPE_DELETE, LINE_TYPE_CONTEXT
 
+class Bunch:
+    def __init__(self, **kwds):
+        self.__dict__.update(kwds)
+
 class Changeset():
     def get_patch_set(self):
         """
@@ -110,7 +114,11 @@ def print_depends(patches, depends):
         print("%s depends on: " % p)
         for dep in patches:
             if dep in depends[p]:
-                print("  %s" % dep)
+                desc = getattr(depends[p][dep], 'desc', None)
+                if desc:
+                    print("  %s (%s)" % (dep, desc))
+                else:
+                    print("  %s" % dep)
 
 def print_depends_matrix(patches, depends):
     # Which patches have at least one dependency drawn (and thus
@@ -125,10 +133,7 @@ def print_depends_matrix(patches, depends):
             # For every later patch, print an "X" if it depends on this
             # one
             if p in depends[dep]:
-                if depends[dep][p] is True:
-                    line += "X"
-                else:
-                    line += depends[dep][p]
+                line += getattr(depends[dep][p], 'matrixmark', 'X')
                 has_deps.add(dep)
             elif dep in has_deps:
                 line += "|"
@@ -157,8 +162,9 @@ overlap=scale
         label = dot_escape_string(str(p))
         label = "\\n".join(textwrap.wrap(label, 25))
         res += """{} [label="{}"]\n""".format(p.number, label)
-        for dep in depends[p]:
-            res += """{} -> {}\n""".format(dep.number, p.number)
+        for dep, v in depends[p].items():
+            style = getattr(v, 'dotstyle', 'solid')
+            res += """{} -> {} [style={}]\n""".format(dep.number, p.number, style)
     res += "}\n"
 
     return res
@@ -238,11 +244,10 @@ class ByLineFileAnalyzer(object):
     """
 
     # Used if a patch changes a line changed by another patch
-    DEPEND_HARD = 'X'
+    DEPEND_HARD = Bunch(desc = 'hard', matrixmark = 'X', dotstyle = 'solid')
     # Used if a patch changes a line changed near a line changed by
     # another patch
-    DEPEND_PROXIMITY = '*'
-
+    DEPEND_PROXIMITY = Bunch(desc = 'proximity', matrixmark = '*', dotstyle = 'dashed')
 
     def __init__(self, fname):
         self.fname = fname
