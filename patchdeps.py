@@ -145,7 +145,7 @@ def print_depends_matrix(patches, depends):
 def dot_escape_string(s):
     return s.replace("\\", "\\\\").replace("\"", "\\\"")
 
-def depends_dot(patches, depends):
+def depends_dot(args, patches, depends):
     """
     Returns dot code for the dependency graph.
     """
@@ -157,6 +157,9 @@ node [shape=box]
 layout=neato
 overlap=scale
 """
+
+    if args.randomize:
+        res += "start=random\n"
 
     for p in patches:
         label = dot_escape_string(str(p))
@@ -524,6 +527,9 @@ def main():
                         only consider exactly the same line. This option
                         is no used when --by-file is passed. The default
                         value is %(default)s.""")
+    parser.add_argument('--randomize', action='store_true', help="""
+                        Randomize the graph layout produced by
+                        --depends-dot and --depends-xdot.""")
     actions = parser.add_argument_group('actions')
     actions.add_argument('--blame', dest='actions', action='append_const',
                         const='blame', help="""
@@ -564,10 +570,10 @@ def main():
         print_depends_matrix(patches, depends)
 
     if 'depends-dot' in args.actions:
-        print(depends_dot(patches, depends))
+        print(depends_dot(args, patches, depends))
 
     if 'depends-xdot' in args.actions:
-        show_xdot(depends_dot(patches, depends))
+        show_xdot(depends_dot(args, patches, depends))
 
 if __name__ == "__main__":
     main()
