@@ -78,23 +78,24 @@ by the earlier patch (number of lines can be configured with the
 	f7bafa7 (staging: dwc2: add const to handling of dwc2_core_params) depends on: 
 	  aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time) (proximity)
 
-	7e69236 (staging: dwc2: use dwc2_hcd_get_frame_number where possible)  -------------'                
-	22cbead (staging: dwc2: add helper variable to simplify code)  ----------------------'X              
-	b4f0a76 (staging: dwc2: unshift non-bool register value constants)  ------------------'  *     X     
-	e6bd5db (staging: dwc2: only read the snpsid register once)  --------------------------' |     X     
-	9637daf (staging: dwc2: remove some device-mode related debug code)  -------------------'|     |     
-	26f69bb (staging: dwc2: simplify register shift expressions)  ---------------------------'     |     
-	9e06814 (staging: dwc2: add missing shift)  ----------------------------------------------'    |     
-	9e3b1d5 (staging: dwc2: simplify debug output in dwc_hc_init)  ----------------------------'   |     
-	e840c95 (staging: dwc2: re-use hptxfsiz variable)  -----------------------------------------'X*|     
-	420b4ba (staging: dwc2: remove redundant register reads)  -----------------------------------'X|     
-	70f5d3f (staging: dwc2: properly mask the GRXFSIZ register)  ---------------------------------'X     
-	aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time)  ---------------'* *  
-	51f794e (staging: dwc2: validate the value for phy_utmi_width)  --------------------------------' |  
-	5cc9513 (staging: dwc2: make dwc2_core_params documentation more complete)  ---------------------'|  
-	f7bafa7 (staging: dwc2: add const to handling of dwc2_core_params)  ------------------------------'  
-	730b35b (staging: dwc2: Remove some useless debug prints)  ----------------------------------------' 
-	c496aed (staging: dwc2: cleanup includes in pci.c)  ------------------------------------------------'
+
+	7e69236 (staging: dwc2: use dwc2_hcd_get_frame_number where possible)                                                 
+	22cbead (staging: dwc2: add helper variable to simplify code)                           X                             
+	b4f0a76 (staging: dwc2: unshift non-bool register value constants)  --------------------'     *           X           
+	e6bd5db (staging: dwc2: only read the snpsid register once)                                   |           X           
+	9637daf (staging: dwc2: remove some device-mode related debug code)                           |           |           
+	26f69bb (staging: dwc2: simplify register shift expressions)  --------------------------------'           |           
+	9e06814 (staging: dwc2: add missing shift)                                                                |           
+	9e3b1d5 (staging: dwc2: simplify debug output in dwc_hc_init)                                             |           
+	e840c95 (staging: dwc2: re-use hptxfsiz variable)                                                     X * |           
+	420b4ba (staging: dwc2: remove redundant register reads)  --------------------------------------------' X |           
+	70f5d3f (staging: dwc2: properly mask the GRXFSIZ register)  -------------------------------------------' X           
+	aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time)  --------------------------' *   *     
+	51f794e (staging: dwc2: validate the value for phy_utmi_width)  --------------------------------------------'   |     
+	5cc9513 (staging: dwc2: make dwc2_core_params documentation more complete)                                      |     
+	f7bafa7 (staging: dwc2: add const to handling of dwc2_core_params)  --------------------------------------------'     
+	730b35b (staging: dwc2: Remove some useless debug prints)                                                             
+	c496aed (staging: dwc2: cleanup includes in pci.c)  
 
 The above uses by-line analysis. A per-file analysis is also available,
 but as you can see below, it is not so useful for this example (since
@@ -102,23 +103,23 @@ there are only a handful of files in the driver, pretty much every patch
 depends on every other patch:
 
 	$ patchdeps --git 6643668..c496aed --depends-matrix --by-file
-	7e69236 (staging: dwc2: use dwc2_hcd_get_frame_number where possible)  -------------'XX XX XXXXXX X  
-	22cbead (staging: dwc2: add helper variable to simplify code)  ----------------------'X |X ||||X| |  
-	b4f0a76 (staging: dwc2: unshift non-bool register value constants)  ------------------'XXXXXXXXXX X  
-	e6bd5db (staging: dwc2: only read the snpsid register once)  --------------------------'|XX||||X| X  
-	9637daf (staging: dwc2: remove some device-mode related debug code)  -------------------'X|XXXXXX X  
-	26f69bb (staging: dwc2: simplify register shift expressions)  ---------------------------'XXXXXXX X  
-	9e06814 (staging: dwc2: add missing shift)  ----------------------------------------------'||||X| X  
-	9e3b1d5 (staging: dwc2: simplify debug output in dwc_hc_init)  ----------------------------'XXXXX X  
-	e840c95 (staging: dwc2: re-use hptxfsiz variable)  -----------------------------------------'XXXX X  
-	420b4ba (staging: dwc2: remove redundant register reads)  -----------------------------------'XXX X  
-	70f5d3f (staging: dwc2: properly mask the GRXFSIZ register)  ---------------------------------'XX X  
-	aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time)  ---------------'XXX  
-	51f794e (staging: dwc2: validate the value for phy_utmi_width)  --------------------------------'XXXX
-	5cc9513 (staging: dwc2: make dwc2_core_params documentation more complete)  ---------------------'|||
-	f7bafa7 (staging: dwc2: add const to handling of dwc2_core_params)  ------------------------------'XX
-	730b35b (staging: dwc2: Remove some useless debug prints)  ----------------------------------------'X
-	c496aed (staging: dwc2: cleanup includes in pci.c)  ------------------------------------------------'
+	7e69236 (staging: dwc2: use dwc2_hcd_get_frame_number where possible)                 X X   X X   X X X X X X   X     
+	22cbead (staging: dwc2: add helper variable to simplify code)  -----------------------' X   | X   | | | | X |   |     
+	b4f0a76 (staging: dwc2: unshift non-bool register value constants)  --------------------' X X X X X X X X X X   X     
+	e6bd5db (staging: dwc2: only read the snpsid register once)  -----------------------------' | X X | | | | X |   X     
+	9637daf (staging: dwc2: remove some device-mode related debug code)  -----------------------' X | X X X X X X   X     
+	26f69bb (staging: dwc2: simplify register shift expressions)  --------------------------------' X X X X X X X   X     
+	9e06814 (staging: dwc2: add missing shift)  ----------------------------------------------------' | | | | X |   X     
+	9e3b1d5 (staging: dwc2: simplify debug output in dwc_hc_init)  -----------------------------------' X X X X X   X     
+	e840c95 (staging: dwc2: re-use hptxfsiz variable)  -------------------------------------------------' X X X X   X     
+	420b4ba (staging: dwc2: remove redundant register reads)  --------------------------------------------' X X X   X     
+	70f5d3f (staging: dwc2: properly mask the GRXFSIZ register)  -------------------------------------------' X X   X     
+	aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time)  --------------------------' X X X     
+	51f794e (staging: dwc2: validate the value for phy_utmi_width)  --------------------------------------------' X X X X 
+	5cc9513 (staging: dwc2: make dwc2_core_params documentation more complete)  ----------------------------------' | | | 
+	f7bafa7 (staging: dwc2: add const to handling of dwc2_core_params)  --------------------------------------------' X X 
+	730b35b (staging: dwc2: Remove some useless debug prints)  -------------------------------------------------------' X 
+	c496aed (staging: dwc2: cleanup includes in pci.c)  ----------------------------------------------------------------' 
 
 Copyright & License
 -------------------
