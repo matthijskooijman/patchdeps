@@ -126,8 +126,12 @@ def print_depends_matrix(patches, depends):
     has_deps = set()
     for p in patches:
         line = str(p)[:80] + "  "
-        line += "-" * (84 - len(line) + p.number * 2)
-        line += "' "
+        if p in has_deps:
+            line += "-" * (84 - len(line) + p.number * 2)
+            line += "' "
+        else:
+            line += " " * (84 - len(line) + p.number * 2)
+            line += "  "
 
         for dep in patches[p.number + 1:]:
             # For every later patch, print an "X" if it depends on this
