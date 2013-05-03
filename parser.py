@@ -197,7 +197,11 @@ def parse_diff(diff):
         # check for hunk header
         re_hunk_header = RE_HUNK_HEADER.match(line)
         if re_hunk_header:
-            hunk_info = re_hunk_header.groups()
+            hunk_info = list(re_hunk_header.groups())
+            # If the hunk length is 1, it is sometimes left out
+            for i in (1, 3):
+                if hunk_info[i] is None:
+                    hunk_info[i] = 1
             hunk = _parse_hunk(diff, *hunk_info)
             current_file.append(hunk)
     return ret
