@@ -31,7 +31,6 @@ import os
 import sys
 import argparse
 import textwrap
-import itertools
 import subprocess
 import collections
 
@@ -262,215 +261,169 @@ class ByLineFileAnalyzer(object):
         self.proximity = proximity
         # Keep two view on our line state, so we can both iterate them
         # in order and do quick lookups
-        self.line_list = []
-        self.line_dict = {}
+        self.state = []
+        self.proximity_to_claim = set()
 
     def analyze(self, depends, patch, hunks):
-        # This is the index in line_list of the first line state that
-        # still uses source line numbers
-        self.to_update_idx = 0
-
-        # The index in line_list of the last line processed (i.e,
-        # matched against a diff line)
-        self.processed_idx = -1
 
         # Offset between source and target files at state_pos
         self.offset = 0
+        prev_state = self.state
+        self.state = []
 
         for hunk in hunks:
-            self.analyze_hunk(depends, patch, hunk)
+            self.analyze_hunk(prev_state, depends, patch, hunk)
 
-        # Pretend we processed the entire list, so update_offset can
-        # update the line numbers of any remaining (unchanged) lines
-        # after the last hunk in this patch
-        self.processed_idx = len(self.line_list)
-        self.update_offset(0)
+        # Move any lines remaining in the old state to the new state
+        self.move_upto(prev_state, None)
+        self.process_claims(depends, patch)
 
-    def line_state(self, lineno, create):
+    def move_upto(self, state, lineno):
         """
-        Returns the state of the given (source) line number, creating a
-        new empty state if it is not yet present and create is True.
+        Move lines from the given state into self.state (using
+        self.offset to update their line numbers), up to but excluding
+        lineno. If lineno is None, all lines are moved.
         """
+        while state and (lineno is None or state[0].lineno < lineno):
+            s = state.pop(0)
+            s.lineno += self.offset
+            self.state.append(s)
 
-        self.processed_idx += 1
-        for state in self.line_list[self.processed_idx:]:
-            # Found it, return
-            if state.lineno == lineno:
-                return state
-            elif state.lineno < lineno:
-                # We're already passed this one, continue looking
-                self.processed_idx += 1
-                continue
-            else:
-                # It's not in there, stop looking
-                break
-                enumerate
-
-        if not create:
-            return None
-
-        # We don't have state for this particular line, insert a
-        # new empty state
-        state = self.LineState(lineno = lineno)
-        self.line_list.insert(self.processed_idx, state)
-        return state
-
-    def update_offset(self, amount):
+    def get_state(self, state, lineno):
         """
-        Update the offset between target and source lines by the
-        specified amount.
+        Returns the state of the given (source) line number. If there is
+        no state, a new, empty state is returned.
 
-        Takes care of updating the line states of all processed lines
-        (up to but excluding self.processed_idx) with the old offset
-        before changing it.
+        Also make sure that any lines before the request lines are
+        copied over to the new state, with their line number updated.
         """
+        # First, copy any previous lines
+        self.move_upto(state, lineno)
 
-        for state in self.line_list[self.to_update_idx:self.processed_idx]:
-            state.lineno += self.offset
-            self.to_update_idx += 1
+        # Then, see if the next line state is the one we want
+        if state and state[0].lineno == lineno:
+            return state.pop(0)
 
-        self.offset += amount
+        # If not, then we don't have it
+        return self.LineState(lineno)
 
-    def analyze_hunk(self, depends, patch, hunk):
+    def claim_before(self, lineno):
+        """
+        Claim self.proximity lines of context before (and excluding) the
+        given lineno.
+        """
+        for l in range(max(1, lineno - self.proximity), lineno):
+            self.proximity_to_claim.add(l)
+
+    def claim_after(self, lineno):
+        """
+        Claim self.proximity lines of context after (and excluding) the
+        given lineno.
+        """
+        for l in range(lineno + 1, lineno + self.proximity + 1):
+            self.proximity_to_claim.add(l)
+
+    def process_claims(self, depends, patch):
+        """
+        Process any proximity claims in self.proximity_to_claim and note
+        them down in self.new_state. Should be called after the entire
+        diff has been processed.
+        """
+        i = 0
+        for lineno in sorted(self.proximity_to_claim):
+            while i < len(self.state) and self.state[i].lineno < lineno:
+                i += 1
+            # Since new_state is sorted, i now points to the only
+            # linestate that could contain the state for lineno
+            if i == len(self.state) or self.state[i].lineno != lineno:
+                self.state.insert(i, self.LineState(lineno))
+
+            # Add proximity deps for patches that touched code
+            # around this line
+            for p in self.state[i].proximity.values():
+                if (not p in depends[patch]):
+                    depends[patch][p] = self.DEPEND_PROXIMITY
+
+            # Claim the state
+            self.state[i].proximity[patch.number] = patch
+
+            i += 1
+
+        self.proximity_to_claim.clear()
+
+    def analyze_hunk(self, prev_state, depends, patch, hunk):
         #print('\n'.join(map(str, self.line_list)))
         #print('--')
+        last_change = None
         for change in hunk.changes:
-            # When adding a line, don't bother creating a new line
-            # state, since we'll be adding one anyway (this prevents
-            # extra unused linestates)
-            create = (change.action != LINE_TYPE_ADD)
-            line_state = self.line_state(change.source_lineno_abs, create)
+            if change.action != LINE_TYPE_CONTEXT and last_change is None:
+                self.claim_before(change.target_lineno_abs)
+            elif change.action == LINE_TYPE_CONTEXT and last_change is not None:
+                self.claim_after(last_change)
 
-            # When changing a line, claim proximity lines before it as
-            # well.
-            if change.action != LINE_TYPE_CONTEXT and self.proximity != 0:
-                # i points to the only linestate that could contain the
-                # state for lineno
-                i = self.processed_idx - 1
-                lineno = change.source_lineno_abs - 1
-                while (change.source_lineno_abs - lineno <= self.proximity and
-                       lineno > 0):
-                    if (i < 0 or
-                        i >= self.to_update_idx and
-                        self.line_list[i].lineno < lineno or
-                        i < self.to_update_idx and
-                        self.line_list[i].lineno - self.offset < lineno):
-                            # This line does not exist yet, i points to an
-                            # earlier line. Insert it
-                            # _after_ i.
-                            self.line_list.insert(i + 1, self.LineState(lineno))
-                            # Point i at the inserted line
-                            i += 1
-                            self.processed_idx += 1
-                            assert i >= self.to_update_idx, "Inserting before already updated line"
-
-                    # Claim this line
-                    s = self.line_list[i]
-
-                    # Already claimed, stop looking. This should also
-                    # prevent us from i becoming < to_update_idx - 1,
-                    # since the state at to_update_idx - 1 should always
-                    # be claimed
-                    if patch.number in s.proximity or s.changed_by == patch:
-                        break
-
-                    s.proximity[patch.number] = patch
-                    i -= 1
-                    lineno -= 1
-
-            # For changes that know about the contents of the old line,
-            # check if it matches our observations
-            if change.action != LINE_TYPE_ADD:
-                if (line_state.line is not None and
-                    change.source_line != line_state.line):
-                        sys.stderr.write("While processing %s\n" % patch)
-                        sys.stderr.write("Warning: patch does not apply cleanly! Results are probably wrong!\n")
-                        sys.stderr.write("According to previous patches, line %s is:\n" % change.source_lineno_abs)
-                        sys.stderr.write("%s\n" % line_state.line)
-                        sys.stderr.write("But according to %s, it should be:\n" % patch)
-                        sys.stderr.write("%s\n\n" % change.source_line)
-                        sys.exit(1)
-
-            if change.action == LINE_TYPE_CONTEXT:
-                if line_state.line is None:
-                    line_state.line = change.target_line
-
-                # For context lines, only remember the line contents
-                #claim_after(in_change, change.
-                #in_change = False
-
-            elif change.action == LINE_TYPE_ADD:
-                self.update_offset(1)
-
-                # Mark this line as changed by this patch
-                s = self.LineState(lineno = change.target_lineno_abs,
-                                   line = change.target_line,
-                                   changed_by = patch)
-                self.line_list.insert(self.processed_idx, s)
-                assert self.processed_idx == self.to_update_idx, "Not everything updated?"
-
-                # Since we insert this using the target line number, it
-                # doesn't need to be updated again
-                self.to_update_idx += 1
-
-                # Add proximity deps for patches that touched code
-                # around this line. We can't get a hard dependency for
-                # an 'add' change, since we don't actually touch any
-                # existing code
-                if line_state:
-                    deps = itertools.chain(line_state.proximity.values(),
-                                           [line_state.changed_by])
-                    for p in deps:
-                        if p and p not in depends[patch] and p != patch:
-                            depends[patch][p] = self.DEPEND_PROXIMITY
-
+            # Note the line number of the last change within the current
+            # set of changes, or set it to None when we're not inside a
+            # changes now (but in context)
+            if change.action == LINE_TYPE_ADD:
+                last_change = change.target_lineno_abs
             elif change.action == LINE_TYPE_DELETE:
-                self.update_offset(-1)
+                last_change = change.target_lineno_abs - 1
+            else:
+                last_change = None
 
-                # This file was touched by another patch, add
-                # dependency
-                if line_state.changed_by:
-                    depends[patch][line_state.changed_by] = self.DEPEND_HARD
-                    depends[patch][line_state.changed_by].dottooltip = "-" + change.source_line
+            if change.action != LINE_TYPE_ADD:
+                line_state = self.get_state(prev_state, change.source_lineno_abs)
 
-                # Also add proximity deps for patches that touched code
-                # around this line
-                for p in line_state.proximity.values():
-                    if (not p in depends[patch]) and p != patch:
-                        depends[patch][p] = self.DEPEND_PROXIMITY
+                # Doublecheck to see if the current linestate has the
+                # contents we expect
+                if line_state.line is None:
+                    # We didn't know about the contents of this line
+                    # before (line claimed as proximity), but we do now.
+                    line_state.line = change.source_line
+                elif change.source_line != line_state.line:
+                    sys.stderr.write("While processing %s\n" % patch)
+                    sys.stderr.write("Warning: patch does not apply cleanly! Results are probably wrong!\n")
+                    sys.stderr.write("According to previous patches, line %s of %s is:\n" % (change.source_lineno_abs, self.fname))
+                    sys.stderr.write("%s\n" % line_state.line)
+                    sys.stderr.write("But according to %s, it should be:\n" % patch)
+                    sys.stderr.write("%s\n\n" % change.source_line)
+                    print(line_state)
+                    print(change)
+                    sys.exit(1)
 
-                # Forget about the state for this source line
-                del self.line_list[self.processed_idx]
-                self.processed_idx -= 1
+                if change.action == LINE_TYPE_CONTEXT:
+                    # Update the line number and optoinally use the line
+                    # contents from the patch (if we didn't have any
+                    # yet).
+                    line_state.lineno = change.target_lineno_abs
+                    self.state.append(line_state)
+                elif change.action == LINE_TYPE_DELETE:
+                    # This file was touched by another patch, add
+                    # dependency
+                    if line_state.changed_by:
+                        depends[patch][line_state.changed_by] = self.DEPEND_HARD
 
-            # After changing a line, claim proximity lines after it as
-            # well.
-            if change.action != LINE_TYPE_CONTEXT and self.proximity != 0:
-                # i points to the only linestate that could contain the
-                # state for lineno
-                i = self.to_update_idx
-                lineno = change.source_lineno_abs
-                if lineno == 0: # When a file is created, the source
-                                # line for the adds is 0...
-                    lineno += 1
-                while (lineno - change.source_lineno_abs < self.proximity):
-                    if (i >= len(self.line_list) or
-                        self.line_list[i].lineno > lineno):
-                            # This line does not exist yet, i points to an
-                            # later line. Insert it _before_ i.
-                            self.line_list.insert(i, self.LineState(lineno))
-                            assert i > self.processed_idx, "Inserting before already processed line"
+                    self.offset -= 1
 
-                    # Claim this line
-                    self.line_list[i].proximity[patch.number] = patch
+                    # Note we do not insert the line into the new state
 
-                    i += 1
-                    lineno += 1
+            else: # LINE_TYPE_ADD
+                # Mark this line as changed by this patch
+                line_state = self.LineState(lineno = change.target_lineno_abs,
+                                            line = change.target_line,
+                                            changed_by = patch)
+                self.state.append(line_state)
+                self.offset += 1
+
+        # Claim any proximity if we the chunk ended in a change line
+        # (which should only happen for context-less diffs).
+        if last_change is not None:
+            self.claim_after(last_change)
 
     def print_blame(self):
         print("{}:".format(self.fname))
         next_line = None
-        for line_state in self.line_list:
+        for line_state in self.state:
             if line_state.line is None:
                 continue
 
@@ -502,6 +455,11 @@ class ByLineFileAnalyzer(object):
             # lines near this one
             self.proximity = {}
 
+            # Changing this line also counts as changing a line nearby,
+            # to make process_claims a bit easer
+            if changed_by:
+                self.proximity[changed_by.number] = changed_by
+
         def __str__(self):
             return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
 
@@ -529,11 +487,13 @@ def main():
                         they change the same lines).""")
     parser.add_argument('--proximity', default='2', metavar='LINES',
                         type=int, help="""
-                        The number of lines changes should be apart to
-                        prevent being marked as a dependency. Pass 0 to
-                        only consider exactly the same line. This option
-                        is no used when --by-file is passed. The default
-                        value is %(default)s.""")
+                        The amount of lines around a change that should
+                        also be considered part of the change. Two
+                        changes need to be twice the given number of
+                        lines apart to prevent being marked as a
+                        dependency. Pass 0 to only consider exactly the
+                        same line. This option is not used when --by-file
+                        is passed. The default value is %(default)s.""")
     parser.add_argument('--randomize', action='store_true', help="""
                         Randomize the graph layout produced by
                         --depends-dot and --depends-xdot.""")
