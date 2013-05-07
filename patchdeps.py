@@ -480,6 +480,8 @@ class ByLineFileAnalyzer(object):
 
             patch = line_state.changed_by
             # For lines that only appeared as context
+            if not patch and line_state.proximity:
+                patch = "*: " + str(next(iter(line_state.proximity.values())))
             if not patch:
                 patch = ""
 
