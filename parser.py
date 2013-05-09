@@ -31,18 +31,22 @@ import itertools
 RE_SOURCE_FILENAME = re.compile(r'^--- (?P<filename>[^\t]+)')
 RE_TARGET_FILENAME = re.compile(r'^\+\+\+ (?P<filename>[^\t]+)')
 
-# @@ (source offset, length) (target offset, length) @@
-RE_HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))?\ @@")
+# @@ -(source offset, length) +(target offset, length) @@
+# For merges (diff with multiple parents):
+# @@@ -(source offset, length) -(source offset, length) +(target offset, length) @@
+# More than 2 is also possible
+RE_HUNK_HEADER = re.compile(r"^@@+ ([^@]*) @@+")
+RE_HUNK_HEADER_NUMBERS = re.compile(r"[-\+](\d+)(?:,(\d+))?")
 
 #   kept line (context)
 # + added line
 # - deleted line
-# \ No newline case (ignore)
-RE_HUNK_BODY_LINE = re.compile(r'^([- \+\\])')
+RE_HUNK_BODY_LINE = re.compile(r'^([- \+]+)')
 
 LINE_TYPE_ADD = '+'
 LINE_TYPE_DELETE= '-'
 LINE_TYPE_CONTEXT = ' '
+LINE_TYPES = (LINE_TYPE_ADD, LINE_TYPE_DELETE, LINE_TYPE_CONTEXT)
 
 class UnidiffParseException(Exception):
     pass
@@ -51,26 +55,29 @@ class Change(object):
     """
     A single line from a patch hunk.
     """
-    def __init__(self, hunk, action, source_lineno_rel, source_line,
+    def __init__(self, hunk, action, actions, source_linenos_rel, source_line,
                  target_lineno_rel, target_line):
         """
         The line numbers must always be present, either source_line or
         target_line can be None depending on the action.
         """
         self.hunk = hunk
+        # The "dominant" action (ADD or DELETE if present, CONTEXT otherwise)
         self.action = action
-        self.source_lineno_rel = source_lineno_rel
+        # The action for each of the sources
+        self.actions = actions
+        self.source_linenos_rel = source_linenos_rel
         self.source_line = source_line
         self.target_lineno_rel = target_lineno_rel
         self.target_line = target_line
 
-        self.source_lineno_abs =  self.hunk.source_start + self.source_lineno_rel
-        self.target_lineno_abs =  self.hunk.target_start + self.target_lineno_rel
+        self.source_linenos_abs = list(map(sum, zip(self.hunk.source_starts, self.source_linenos_rel)))
+        self.target_lineno_abs = self.hunk.target_start + self.target_lineno_rel
 
     def __str__(self):
-        return "(-%s, +%s) %s%s" % (self.source_lineno_abs,
+        return "(-%s, +%s) %s%s" % (', -'.join(map(str, self.source_linenos_abs)),
                                     self.target_lineno_abs,
-                                    self.action,
+                                    self.actions,
                                     self.source_line or self.target_line)
 
 class PatchedFile(list):
@@ -92,17 +99,12 @@ class PatchedFile(list):
 class Hunk(object):
     """Each of the modified blocks of a file."""
 
-    def __init__(self, src_start=0, src_len=0, tgt_start=0, tgt_len=0):
-        self.source_start = int(src_start)
-        self.source_length = int(src_len)
+    def __init__(self, src_starts, src_lens, tgt_start, tgt_len):
+        self.source_starts = [int(n) for n in src_starts]
+        self.source_lengths = [int(n) for n in src_lens]
         self.target_start = int(tgt_start)
         self.target_length = int(tgt_len)
         self.changes = []
-        self.to_parse = [self.source_length, self.target_length]
-
-    def is_valid(self):
-        """Check hunk header data matches entered lines info."""
-        return self.to_parse == [0, 0]
 
     def append_change(self, change):
         """
@@ -110,63 +112,87 @@ class Hunk(object):
         """
         self.changes.append(change)
 
-        if (change.action == LINE_TYPE_CONTEXT or
-            change.action == LINE_TYPE_DELETE):
-                self.to_parse[0] -= 1
-                if self.to_parse[0] < 0:
-                    raise UnidiffParseException(
-                        'To many source lines in hunk: %s' % self)
-
-        if (change.action == LINE_TYPE_CONTEXT or
-            change.action == LINE_TYPE_ADD):
-                self.to_parse[1] -= 1
-                if self.to_parse[1] < 0:
-                    raise UnidiffParseException(
-                        'To many target lines in hunk: %s' % self)
-
     def __str__(self):
-        return "<@@ %d,%d %d,%d @@>" % (self.source_start, self.source_length,
+        return "<@@ %s %d,%d @@>" % (' '.join("%d,%d" % x for x in zip(self.source_starts, self.source_lengths)),
                                         self.target_start, self.target_length)
 
 
-def _parse_hunk(diff, source_start, source_len, target_start, target_len):
-    hunk = Hunk(source_start, source_len, target_start, target_len)
+def _parse_hunk(diff, source_starts, source_lens, target_start, target_len):
+    hunk = Hunk(source_starts, source_lens, target_start, target_len)
     modified = 0
     deleting = 0
-    source_lineno = 0
+    num_sources = len(source_starts)
+    source_linenos = [0] * num_sources
     target_lineno = 0
 
     for line in diff:
-        valid_line = RE_HUNK_BODY_LINE.match(line)
-        if valid_line:
-            action = valid_line.group(0)
-            original_line = line[1:]
+        if line and line[0] == '\\':
+            # Skip "\ No newline at end of file" lines
+            continue
 
-            kwargs = dict(action = action,
-                          hunk = hunk,
-                          source_lineno_rel = source_lineno,
-                          target_lineno_rel = target_lineno,
-                          source_line = None,
-                          target_line = None)
-
-            if action == LINE_TYPE_ADD:
-                kwargs['target_line'] = original_line
-                target_lineno += 1
-            elif action == LINE_TYPE_DELETE:
-                kwargs['source_line'] = original_line
-                source_lineno += 1
-            elif action == LINE_TYPE_CONTEXT:
-                kwargs['source_line'] = original_line
-                kwargs['target_line'] = original_line
-                source_lineno += 1
-                target_lineno += 1
-            hunk.append_change(Change(**kwargs))
-        else:
+        if len(line) < num_sources:
             raise UnidiffParseException('Hunk diff data expected: ' + line)
 
-        # check hunk len(old_lines) and len(new_lines) are ok
-        if hunk.is_valid():
-            break
+        # With multiple sources, there is one action (+/-/space) column
+        # for each source.
+        actions = line[:num_sources]
+        original_line = line[num_sources:]
+
+        # Check if only valid action characters are used
+        if any([c not in LINE_TYPES for c in actions]):
+            raise UnidiffParseException('Invalid action characters: ' + line)
+
+        # Mixing - and + doesn't make sense (only mixing either with
+        # spaces is possible).
+        if LINE_TYPE_DELETE in actions and LINE_TYPE_ADD in actions:
+            raise UnidiffParseException('Cannot mix + and - actions: ' + line)
+
+        kwargs = dict(actions = actions,
+                      hunk = hunk,
+                      source_linenos_rel = list(source_linenos),
+                      target_lineno_rel = target_lineno,
+                      source_line = None,
+                      target_line = None)
+
+        if LINE_TYPE_ADD in actions:
+            kwargs['target_line'] = original_line
+            action = LINE_TYPE_ADD
+        elif LINE_TYPE_DELETE in actions:
+            kwargs['source_line'] = original_line
+            action = LINE_TYPE_DELETE
+        else:
+            # Action for all sources must be context
+            kwargs['source_line'] = original_line
+            kwargs['target_line'] = original_line
+            action = LINE_TYPE_CONTEXT
+
+        # The "dominant" action
+        kwargs['action'] = action
+
+        # Find out the line number change for each source
+        for (i, a) in enumerate(actions):
+            # Delete action always means the line was in that source,
+            # but a context action in a line that also has delete
+            # actions means the line was already gone in that source, so
+            # don't increment the source lineno in that case.
+            if (a == LINE_TYPE_DELETE or
+                a == LINE_TYPE_CONTEXT and action != LINE_TYPE_DELETE):
+                    source_linenos[i] += 1
+
+        if (action == LINE_TYPE_CONTEXT or
+            action == LINE_TYPE_ADD):
+                target_lineno += 1
+
+        hunk.append_change(Change(**kwargs))
+
+        if (any(a > b for (a, b) in zip(source_linenos, hunk.source_lengths)) or
+            target_lineno > hunk.target_length):
+                raise UnidiffParseException( 'To many lines in hunk: ' + line)
+
+        # check if we have seen all the lines advertised by the header
+        if (source_linenos == hunk.source_lengths and
+            target_lineno == hunk.target_length):
+                break
 
     return hunk
 
@@ -197,12 +223,29 @@ def parse_diff(diff):
         # check for hunk header
         re_hunk_header = RE_HUNK_HEADER.match(line)
         if re_hunk_header:
-            hunk_info = list(re_hunk_header.groups())
-            # If the hunk length is 1, it is sometimes left out
-            for i in (1, 3):
-                if hunk_info[i] is None:
-                    hunk_info[i] = 1
-            hunk = _parse_hunk(diff, *hunk_info)
+            starts = []
+            lengths = []
+            for pair in re_hunk_header.group(1).split(' '):
+                # The hunk header contains a two or more pairs of
+                # numbers, like:
+                # @@@ -428,15 -425,20 +426,19 @@@
+                # More than two is used by git for merge commits, e.g.,
+                # a diff with multiple sources.
+                re_pair = RE_HUNK_HEADER_NUMBERS.match(pair)
+                if not re_pair:
+                    raise UnidiffParseException('Invalid hunk header: ' + line)
+
+                starts.append(re_pair.group(1))
+                length = re_pair.group(2)
+                # If the hunk length is 1, it is sometimes left out
+                if length is None:
+                    lengths.append(1)
+                lengths.append(length)
+
+            if len(starts) < 2:
+                raise UnidiffParseException('Invalid hunk header: ' + line)
+
+            hunk = _parse_hunk(diff, starts[:-1], lengths[:-1], starts[-1], lengths[-1])
             current_file.append(hunk)
     return ret
 

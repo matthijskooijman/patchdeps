@@ -372,7 +372,7 @@ class ByLineFileAnalyzer(object):
                 last_change = None
 
             if change.action != LINE_TYPE_ADD:
-                line_state = self.get_state(prev_state, change.source_lineno_abs)
+                line_state = self.get_state(prev_state, change.source_linenos_abs[0])
 
                 # Doublecheck to see if the current linestate has the
                 # contents we expect
@@ -383,7 +383,7 @@ class ByLineFileAnalyzer(object):
                 elif change.source_line != line_state.line:
                     sys.stderr.write("While processing %s\n" % patch)
                     sys.stderr.write("Warning: patch does not apply cleanly! Results are probably wrong!\n")
-                    sys.stderr.write("According to previous patches, line %s of %s is:\n" % (change.source_lineno_abs, self.fname))
+                    sys.stderr.write("According to previous patches, line %s of %s is:\n" % (change.source_linenos_abs[0], self.fname))
                     sys.stderr.write("%s\n" % line_state.line)
                     sys.stderr.write("But according to %s, it should be:\n" % patch)
                     sys.stderr.write("%s\n\n" % change.source_line)
