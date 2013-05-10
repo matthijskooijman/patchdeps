@@ -27,6 +27,7 @@
 # http://blog.mozilla.org/sfink/2012/01/05/patch-queue-dependencies/
 #
 
+import re
 import os
 import sys
 import argparse
@@ -77,12 +78,17 @@ class PatchFile(Changeset):
         return os.path.basename(self.filename)
 
 class GitRev(Changeset):
-    def __init__(self, rev, msg):
+    def __init__(self, fullrev, rev, parents, children, msg):
+        self.fullrev = fullrev
         self.rev = rev
+        # Note that parents are all parents in the repo, while children
+        # only includes children within the current list of patches
+        self.parents = parents
+        self.children = children
         self.msg = msg
 
     def get_diff(self):
-        diff = subprocess.check_output(['git', 'diff-tree', '-p', self.rev])
+        diff = subprocess.check_output(['git', 'diff-tree', '-p', self.fullrev])
         # Convert to utf8 and just drop any invalid characters (we're
         # not interested in the actual file contents and all diff
         # special characters are valid ascii).
@@ -96,15 +102,23 @@ class GitRev(Changeset):
         """
         Generate Changeset objects, given arguments for git rev-list.
         """
-        output = subprocess.check_output(['git', 'rev-list', '--oneline', '--reverse'] + args)
+        output = subprocess.check_output(['git', 'rev-list', '--children', '--pretty=%h,%p,%s', '--reverse'] + args)
 
         if not output:
             sys.stderr.write("No revisions specified?\n")
         else:
-            lines = str(output, encoding='ascii').strip().split('\n')
+            lines = re.finditer(r'.*\n', str(output, encoding='ascii'))
 
-            for line in lines:
-                yield GitRev(*line.split(' ', 1))
+            # Iterate output 2 lines at a time (this works because lines
+            # is already an iterator)
+            for first, second in zip(lines, lines):
+                # First line is "commit [commit sha] [sha of children]"
+                _, sha, *children = first.group().strip().split()
+                # Second line has the pretty format, so
+                # "[short sha],[short sha of parents],[message]"
+                short, strparents, msg = second.group().strip().split(',')
+                parents = strparents.split()
+                yield GitRev(sha, short, parents, children, msg)
 
 def print_depends(patches, depends):
     for p in patches:
