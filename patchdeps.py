@@ -57,8 +57,9 @@ class Changeset():
         raise NotImplementedError
 
 class PatchFile(Changeset):
-    def __init__(self, filename):
+    def __init__(self, number, filename):
         self.filename = filename
+        self.id = number
 
     def get_diff(self):
         f = open(self.filename, 'r', encoding='utf-8')
@@ -71,15 +72,15 @@ class PatchFile(Changeset):
         """
         Generate Changeset objects, given patch filenamesk
         """
-        for filename in args:
-            yield PatchFile(filename)
+        for i, filename in enumerate(args):
+            yield PatchFile(i, filename)
 
     def __str__(self):
         return os.path.basename(self.filename)
 
 class GitRev(Changeset):
     def __init__(self, fullrev, rev, parents, children, msg):
-        self.fullrev = fullrev
+        self.id = fullrev
         self.rev = rev
         # Note that parents are all parents in the repo, while children
         # only includes children within the current list of patches
@@ -88,7 +89,7 @@ class GitRev(Changeset):
         self.msg = msg
 
     def get_diff(self):
-        diff = subprocess.check_output(['git', 'diff-tree', '-p', self.fullrev])
+        diff = subprocess.check_output(['git', 'diff-tree', '-p', self.id])
         # Convert to utf8 and just drop any invalid characters (we're
         # not interested in the actual file contents and all diff
         # special characters are valid ascii).
@@ -137,16 +138,16 @@ def print_depends_matrix(patches, depends):
     # Which patches have at least one dependency drawn (and thus
     # need lines from then on)?
     has_deps = set()
-    for p in patches:
+    for i, p in enumerate(patches):
         line = str(p)[:80] + "  "
         if p in has_deps:
-            line += "-" * (84 - len(line) + p.number * 2)
+            line += "-" * (84 - len(line) + i * 2)
             line += "' "
         else:
-            line += " " * (84 - len(line) + p.number * 2)
+            line += " " * (84 - len(line) + i * 2)
             line += "  "
 
-        for dep in patches[p.number + 1:]:
+        for dep in patches[i + 1:]:
             # For every later patch, print an "X" if it depends on this
             # one
             if p in depends[dep]:
@@ -182,10 +183,10 @@ overlap=scale
     for p in patches:
         label = dot_escape_string(str(p))
         label = "\\n".join(textwrap.wrap(label, 25))
-        res += """{} [label="{}"]\n""".format(p.number, label)
+        res += """{} [label="{}"]\n""".format(p.id, label)
         for dep, v in depends[p].items():
             style = getattr(v, 'dotstyle', 'solid')
-            res += """{} -> {} [style={}]\n""".format(dep.number, p.number, style)
+            res += """{} -> {} [style={}]\n""".format(dep.id, p.id, style)
     res += "}\n"
 
     return res
@@ -359,7 +360,7 @@ class ByLineFileAnalyzer(object):
                     depends[patch][p] = self.DEPEND_PROXIMITY
 
             # Claim the state
-            self.state[i].proximity[patch.number] = patch
+            self.state[i].proximity[patch.id] = patch
 
             i += 1
 
@@ -472,7 +473,7 @@ class ByLineFileAnalyzer(object):
             # Changing this line also counts as changing a line nearby,
             # to make process_claims a bit easer
             if changed_by:
-                self.proximity[changed_by.number] = changed_by
+                self.proximity[changed_by.id] = changed_by
 
         def __str__(self):
             return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
@@ -538,9 +539,6 @@ def main():
         args.actions = ['depends-matrix']
 
     patches = list(args.changeset_type.get_changesets(args.arguments))
-
-    for i, p in enumerate(patches):
-        p.number = i
 
     depends = args.analyzer().analyze(args, patches)
 
