@@ -240,7 +240,8 @@ def parse_diff(diff):
                 # If the hunk length is 1, it is sometimes left out
                 if length is None:
                     lengths.append(1)
-                lengths.append(length)
+                else:
+                    lengths.append(length)
 
             if len(starts) < 2:
                 raise UnidiffParseException('Invalid hunk header: ' + line)
