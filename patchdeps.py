@@ -402,8 +402,6 @@ class ByLineFileAnalyzer(object):
                     sys.stderr.write("%s\n" % line_state.line)
                     sys.stderr.write("But according to %s, it should be:\n" % patch)
                     sys.stderr.write("%s\n\n" % change.source_line)
-                    print(line_state)
-                    print(change)
                     sys.exit(1)
 
                 if change.action == LINE_TYPE_CONTEXT:
