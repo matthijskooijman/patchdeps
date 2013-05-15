@@ -86,11 +86,13 @@ class PatchedFile(list):
     def __init__(self, source='', target=''):
         self.source_file = source
         self.target_file = target
+        self.delete_file = False
 
         if self.source_file.startswith('a/') and self.target_file.startswith('b/'):
             self.path = self.source_file[2:]
         elif self.source_file.startswith('a/') and self.target_file == '/dev/null':
             self.path = self.source_file[2:]
+            self.delete_file = True
         elif self.target_file.startswith('b/') and self.source_file == '/dev/null':
             self.path = self.target_file[2:]
         else:
