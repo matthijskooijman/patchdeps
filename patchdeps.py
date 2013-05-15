@@ -221,7 +221,10 @@ class ByFileAnalyzer(object):
                 for other in touches_file[f.path]:
                     depends[patch][other] = True
 
-                touches_file[f.path].append(patch)
+                if f.delete_file:
+                    del touches_file[f.path]
+                else:
+                    touches_file[f.path].append(patch)
 
         if 'blame' in args.actions:
             for f, ps in touches_file.items():
@@ -251,6 +254,9 @@ class ByLineAnalyzer(object):
                     state[f.path] = ByLineFileAnalyzer(f.path, args.proximity)
 
                 state[f.path].analyze(depends, patch, f)
+
+                if f.delete_file:
+                    del state[f.path]
 
         if 'blame' in args.actions:
             for a in state.values():
