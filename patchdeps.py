@@ -75,7 +75,7 @@ class PatchFile(Changeset):
         f = open(self.filename, 'r', encoding='utf-8')
         # Iterating over a file gives separate lines, with newlines
         # included. We want those stripped off
-        return map(lambda x: x.rstrip('\n'), f)
+        return (line.rstrip('\n') for line in f)
 
     @staticmethod
     def get_changesets(args):
