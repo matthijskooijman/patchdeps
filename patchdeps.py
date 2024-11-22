@@ -35,11 +35,22 @@ import itertools
 import subprocess
 import collections
 
+from enum import Enum
 from parser import LineType, parse_diff
 
-class Bunch:
-    def __init__(self, **kwds):
-        self.__dict__.update(kwds)
+
+class Depend(Enum):
+    # Used if a patch changes a line changed by another patch
+    HARD = ("hard", "X", "solid")
+    # Used if a patch changes a line changed near a line changed by another patch
+    PROXIMITY = ("proximity", "*", "dashed")
+    # By filename
+    FILENAME = ("", "X", "solid")
+
+    def __init__(self, desc: str, matrixmark: str, dotstyle: str) -> None:
+        self.desc = desc
+        self.matrixmark = matrixmark
+        self.dotstyle = dotstyle
 
 
 class Changeset:
@@ -114,7 +125,7 @@ def print_depends(patches, depends):
         print("%s depends on: " % p)
         for dep in patches:
             if dep in depends[p]:
-                desc = getattr(depends[p][dep], 'desc', None)
+                desc = depends[p][dep].desc
                 if desc:
                     print("  %s (%s)" % (dep, desc))
                 else:
@@ -137,7 +148,7 @@ def print_depends_matrix(patches, depends):
             # For every later patch, print an "X" if it depends on this
             # one
             if p in depends[dep]:
-                line += getattr(depends[dep][p], 'matrixmark', 'X')
+                line += depends[dep][p].matrixmark
                 has_deps.add(dep)
             elif dep in has_deps:
                 line += "|"
@@ -171,7 +182,7 @@ overlap=scale
         label = "\\n".join(textwrap.wrap(label, 25))
         res += """{} [label="{}"]\n""".format(p.number, label)
         for dep, v in depends[p].items():
-            style = getattr(v, 'dotstyle', 'solid')
+            style = v.dotstyle
             res += """{} -> {} [style={}]\n""".format(dep.number, p.number, style)
     res += "}\n"
 
@@ -199,14 +210,14 @@ class ByFileAnalyzer:
         # of patches
         touches_file = collections.defaultdict(list)
 
-        # Which patch depends on which other patches? A dict of
-        # patch => (list of dependency patches)
+        # Which patch depends on which other patches?
+        # A dict of patch => (dict of dependent patches => Depend.FILENAME)
         depends = collections.defaultdict(dict)
 
         for patch in patches:
             for f in patch.get_patch_set():
                 for other in touches_file[f.path]:
-                    depends[patch][other] = True
+                    depends[patch][other] = Depend.FILENAME
 
                 touches_file[f.path].append(patch)
 
@@ -229,8 +240,7 @@ class ByLineAnalyzer:
         state = dict()
 
         # Which patch depends on which other patches?
-        # A dict of patch => (dict of patch depended on => type) Here,
-        # type is either DEPEND_HARD or DEPEND_PROXIMITY.
+        # A dict of patch => (dict of dependent patches => Depend)
         depends = collections.defaultdict(dict)
 
         for patch in patches:
@@ -252,12 +262,6 @@ class ByLineFileAnalyzer:
     Helper class for the ByLineAnalyzer, that performs the analysis for
     a specific file. Created once and called for multiple patches.
     """
-
-    # Used if a patch changes a line changed by another patch
-    DEPEND_HARD = Bunch(desc = 'hard', matrixmark = 'X', dotstyle = 'solid')
-    # Used if a patch changes a line changed near a line changed by
-    # another patch
-    DEPEND_PROXIMITY = Bunch(desc = 'proximity', matrixmark = '*', dotstyle = 'dashed')
 
     def __init__(self, fname, proximity):
         self.fname = fname
@@ -420,7 +424,7 @@ class ByLineFileAnalyzer:
                                            [line_state.changed_by])
                     for p in deps:
                         if p and p not in depends[patch] and p != patch:
-                            depends[patch][p] = self.DEPEND_PROXIMITY
+                            depends[patch][p] = Depend.PROXIMITY
 
             elif change.action == LineType.DELETE:
                 self.update_offset(-1)
@@ -428,7 +432,7 @@ class ByLineFileAnalyzer:
                 # This file was touched by another patch, add
                 # dependency
                 if line_state.changed_by:
-                    depends[patch][line_state.changed_by] = self.DEPEND_HARD
+                    depends[patch][line_state.changed_by] = Depend.HARD
                     # TODO(PHH): Assigning to singleton Depend.*.dottooltip; unused by `depends_dot`
                     # https://graphviz.org/docs/attrs/tooltip/
                     # depends[patch][line_state.changed_by].dottooltip = f"-{change.source_line}"
@@ -437,7 +441,7 @@ class ByLineFileAnalyzer:
                 # around this line
                 for p in line_state.proximity.values():
                     if (not p in depends[patch]) and p != patch:
-                        depends[patch][p] = self.DEPEND_PROXIMITY
+                        depends[patch][p] = Depend.PROXIMITY
 
                 # Forget about the state for this source line
                 del self.line_list[self.processed_idx]
