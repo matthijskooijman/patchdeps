@@ -158,7 +158,7 @@ def print_depends_matrix(patches, depends):
 
 
 def dot_escape_string(s):
-    return s.replace("\\", "\\\\").replace("\"", "\\\"")
+    return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def depends_dot(args, patches, depends):
