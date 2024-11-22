@@ -142,8 +142,7 @@ def print_depends_matrix(patches, depends):
         line += fill * (84 - len(line) + i * 2) + corner + " "
 
         for dep in patches[i + 1:]:
-            # For every later patch, print an "X" if it depends on this
-            # one
+            # For every later patch, print an "X" if it depends on this one
             if p in depends[dep]:
                 line += " " + depends[dep][p].matrixmark
                 has_deps.add(dep)
@@ -377,8 +376,7 @@ class ByLineFileAnalyzer:
             # For changes that know about the contents of the old line,
             # check if it matches our observations
             if change.action != LineType.ADD:
-                if (line_state.line is not None and
-                    change.source_line != line_state.line):
+                if line_state.line is not None and change.source_line != line_state.line:
                     sys.exit(
                         f"While processing {patch}\n"
                         "Warning: patch does not apply cleanly! Results are probably wrong!\n"
@@ -453,12 +451,11 @@ class ByLineFileAnalyzer:
                                 # line for the adds is 0...
                     lineno += 1
                 while (lineno - change.source_lineno_abs < self.proximity):
-                    if (i >= len(self.line_list) or
-                        self.line_list[i].lineno > lineno):
-                            # This line does not exist yet, i points to an
-                            # later line. Insert it _before_ i.
-                            self.line_list.insert(i, self.LineState(lineno))
-                            assert i > self.processed_idx, "Inserting before already processed line"
+                    if i >= len(self.line_list) or self.line_list[i].lineno > lineno:
+                        # This line does not exist yet, i points to an
+                        # later line. Insert it _before_ i.
+                        self.line_list.insert(i, self.LineState(lineno))
+                        assert i > self.processed_idx, "Inserting before already processed line"
 
                     # Claim this line
                     self.line_list[i].proximity.add(patch)
