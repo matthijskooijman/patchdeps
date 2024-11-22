@@ -67,6 +67,7 @@ class Changeset:
         """
         raise NotImplementedError
 
+
 class PatchFile(Changeset):
     def __init__(self, filename):
         self.filename = filename
@@ -87,6 +88,7 @@ class PatchFile(Changeset):
 
     def __str__(self):
         return os.path.basename(self.filename)
+
 
 class GitRev(Changeset):
     def __init__(self, rev, msg):
@@ -114,9 +116,9 @@ class GitRev(Changeset):
             sys.stderr.write("No revisions specified?\n")
         else:
             lines = str(output, encoding='ascii').strip().split('\n')
-
             for line in lines:
                 yield GitRev(*line.split(' ', 1))
+
 
 def print_depends(patches, depends):
     for p in patches:
@@ -130,6 +132,7 @@ def print_depends(patches, depends):
                     print(f"  {dep} ({desc})")
                 else:
                     print(f"  {dep}")
+
 
 def print_depends_matrix(patches, depends):
     # Which patches have at least one dependency drawn (and thus
@@ -153,8 +156,10 @@ def print_depends_matrix(patches, depends):
 
         print(line)
 
+
 def dot_escape_string(s):
     return s.replace("\\", "\\\\").replace("\"", "\\\"")
+
 
 def depends_dot(args, patches, depends):
     """
@@ -181,6 +186,7 @@ overlap=scale
     res += "}\n"
 
     return res
+
 
 def show_xdot(dot):
     """
@@ -305,7 +311,7 @@ class ByLineFileAnalyzer:
 
         # We don't have state for this particular line, insert a
         # new empty state
-        state = self.LineState(lineno = lineno)
+        state = self.LineState(lineno=lineno)
         self.line_list.insert(self.processed_idx, state)
         return state
 
@@ -398,9 +404,9 @@ class ByLineFileAnalyzer:
                 self.update_offset(1)
 
                 # Mark this line as changed by this patch
-                s = self.LineState(lineno = change.target_lineno_abs,
-                                   line = change.target_line,
-                                   changed_by = patch)
+                s = self.LineState(lineno=change.target_lineno_abs,
+                                   line=change.target_line,
+                                   changed_by=patch)
                 self.line_list.insert(self.processed_idx, s)
                 assert self.processed_idx == self.to_update_idx, "Not everything updated?"
 
@@ -495,6 +501,7 @@ class ByLineFileAnalyzer:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Analyze patches for dependencies.')
+
     types = parser.add_argument_group('type').add_mutually_exclusive_group(required=True)
     types.add_argument('--git', dest='changeset_type', action='store_const',
                    const=GitRev,
@@ -502,6 +509,7 @@ def parse_args() -> argparse.Namespace:
     types.add_argument('--patches', dest='changeset_type', action='store_const',
                    const=PatchFile,
                    help='Analyze a list of patch files (non-option arguments are patch filenames')
+
     parser.add_argument('arguments', metavar="ARG", nargs='*', help="""
                         Specification of patches to analyze, depending
                         on the type given. When --git is given, this is
@@ -524,6 +532,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--randomize', action='store_true', help="""
                         Randomize the graph layout produced by
                         --depends-dot and --depends-xdot.""")
+
     actions = parser.add_argument_group('actions')
     actions.add_argument('--blame', dest='actions', action='append_const',
                         const='blame', help="""
@@ -544,9 +553,10 @@ def parse_args() -> argparse.Namespace:
                         Output dot format for a dependency graph.""")
     actions.add_argument('--xdot', dest='actions', action='append_const',
                         const='xdot', help="""
-                        Show a dependencygraph using xdot (if available).""")
+                        Show a dependency graph using xdot (if available).""")
 
     args = parser.parse_args()
+
     if not args.actions:
         args.actions = ['matrix']
 
@@ -571,6 +581,7 @@ def main() -> None:
 
     if 'xdot' in args.actions:
         show_xdot(depends_dot(args, patches, depends))
+
 
 if __name__ == "__main__":
     main()

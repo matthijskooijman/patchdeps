@@ -42,6 +42,7 @@ class LineType(Enum):
     CONTEXT = ' '  # kept line (context)
     IGNORE = '\\'  # No newline case (ignore)
 
+
 class UnidiffParseException(Exception):
     pass
 
@@ -63,11 +64,12 @@ class Change:
         self.target_lineno_rel = target_lineno_rel
         self.target_line = target_line
 
-        self.source_lineno_abs =  self.hunk.source_start + self.source_lineno_rel
-        self.target_lineno_abs =  self.hunk.target_start + self.target_lineno_rel
+        self.source_lineno_abs = self.hunk.source_start + self.source_lineno_rel
+        self.target_lineno_abs = self.hunk.target_start + self.target_lineno_rel
 
     def __str__(self):
         return f"(-{self.source_lineno_abs}, +{self.target_lineno_abs}) {self.action}{self.source_line or self.target_line}"
+
 
 class PatchedFile(list):
     """Data from a patched file."""
@@ -184,6 +186,7 @@ def parse_diff(diff):
                 _int1(m[4]),
             )
             current_file.append(hunk)
+
     return ret
 
 
