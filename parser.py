@@ -172,7 +172,6 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
 
 def parse_diff(diff):
     ret = []
-    current_file = None
     # Make sure we only iterate the diff once, instead of restarting
     # from the top inside _parse_hunk
     lines = iter(diff)
@@ -181,7 +180,6 @@ def parse_diff(diff):
         check_source = RE_SOURCE_FILENAME.match(line)
         if check_source:
             source_file = check_source.group('filename')
-            current_file = None
             continue
 
         # check for target file header
