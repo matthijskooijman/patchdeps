@@ -446,10 +446,8 @@ class ByLineFileAnalyzer:
                 # i points to the only linestate that could contain the
                 # state for lineno
                 i = self.to_update_idx
-                lineno = change.source_lineno_abs
-                if lineno == 0: # When a file is created, the source
-                                # line for the adds is 0...
-                    lineno += 1
+                # When a file is created, the source line for the adds is 0...
+                lineno = change.source_lineno_abs or 1
                 while (lineno - change.source_lineno_abs < self.proximity):
                     if i >= len(self.line_list) or self.line_list[i].lineno > lineno:
                         # This line does not exist yet, i points to an
