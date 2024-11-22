@@ -147,20 +147,30 @@ def print_depends_matrix(patches, depends):
     # Which patches have at least one dependency drawn (and thus
     # need lines from then on)?
     has_deps = set()
-    for i, p in enumerate(patches):
-        fill, corner = ("─", "┘") if p in has_deps else (" ", " ")
-        line = str(p)[:80] + "  "
-        line += fill * (84 - len(line) + i * 2) + corner + " "
+    prereq: set[Changeset] = {dep for p in patches for dep in depends[p]}
+    # Every patch depending on other patches needs a column
+    depending: list[Changeset] = [p for p in patches if depends[p]]
+    column = 82
+    for p in patches:
+        if depending and depending[0] == p:
+            del depending[0]
+            column += 2
+            fill, corner = "─", "┘"
+        else:
+            fill = corner = "·" if p in prereq else " "
+        line = f"{f'{p!s:.80}  ':{fill}<{column}}{corner}"
 
-        for dep in patches[i + 1:]:
+        for i, dep in enumerate(depending):
+            # Show ruler if a later patch depends on this one
+            ruler = "·" if any(depends[d].get(p) for d in depending[i:]) else " "
             # For every later patch, print an "X" if it depends on this one
-            if p in depends[dep]:
-                line += " " + depends[dep][p].matrixmark
+            if dependency := depends[dep].get(p):
+                line += f"{ruler}{dependency.matrixmark}"
                 has_deps.add(dep)
             elif dep in has_deps:
-                line += " │"
+                line += f"{ruler}│"
             else:
-                line += "  "
+                line += ruler * 2
 
         print(line)
 
