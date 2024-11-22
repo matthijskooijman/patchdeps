@@ -304,7 +304,6 @@ class ByLineFileAnalyzer:
             else:
                 # It's not in there, stop looking
                 break
-                enumerate
 
         if not create:
             return None
