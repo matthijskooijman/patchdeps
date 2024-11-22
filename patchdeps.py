@@ -135,6 +135,14 @@ def print_depends(patches, depends):
                         print(f"  {dep}")
 
 
+def print_depends_tsort(patches, depends) -> None:
+    for p in patches:
+        if dependencies := depends[p]:
+            for dep in patches:
+                if dep in dependencies:
+                    print(f"{dep}\t{p}")
+
+
 def print_depends_matrix(patches, depends):
     # Which patches have at least one dependency drawn (and thus
     # need lines from then on)?
@@ -542,6 +550,9 @@ def parse_args() -> argparse.Namespace:
                         Output a matrix with patches on both axis and
                         markings for dependencies. This is used if not
                         action is given.""")
+    actions.add_argument('--tsort', dest='actions', action='append_const',
+                        const='tsort', help="""
+                        Show dependency graph as tsort input.""")
     actions.add_argument('--dot', dest='actions', action='append_const',
                         const='dot', help="""
                         Output dot format for a dependency graph.""")
@@ -569,6 +580,9 @@ def main() -> None:
 
     if 'matrix' in args.actions:
         print_depends_matrix(patches, depends)
+
+    if 'tsort' in args.actions:
+        print_depends_tsort(patches, depends)
 
     if 'dot' in args.actions:
         print(depends_dot(args, patches, depends))
