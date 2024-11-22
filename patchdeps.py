@@ -73,7 +73,7 @@ class PatchFile(Changeset):
         self.filename = filename
 
     def get_diff(self):
-        f = open(self.filename, 'r', encoding='utf-8')
+        f = open(self.filename, encoding='utf-8')
         # Iterating over a file gives separate lines, with newlines
         # included. We want those stripped off
         return (line.rstrip('\n') for line in f)
