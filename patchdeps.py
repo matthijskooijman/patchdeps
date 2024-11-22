@@ -136,13 +136,9 @@ def print_depends_matrix(patches, depends):
     # need lines from then on)?
     has_deps = set()
     for p in patches:
+        fill, corner = ("─", "┘") if p in has_deps else (" ", " ")
         line = str(p)[:80] + "  "
-        if p in has_deps:
-            line += "-" * (84 - len(line) + p.number * 2)
-            line += "' "
-        else:
-            line += " " * (84 - len(line) + p.number * 2)
-            line += "  "
+        line += fill * (84 - len(line) + p.number * 2) + corner + " "
 
         for dep in patches[p.number + 1:]:
             # For every later patch, print an "X" if it depends on this
@@ -151,7 +147,7 @@ def print_depends_matrix(patches, depends):
                 line += " " + depends[dep][p].matrixmark
                 has_deps.add(dep)
             elif dep in has_deps:
-                line += " |"
+                line += " │"
             else:
                 line += "  "
 
