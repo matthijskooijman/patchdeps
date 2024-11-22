@@ -27,14 +27,13 @@
 # http://blog.mozilla.org/sfink/2012/01/05/patch-queue-dependencies/
 #
 
-import os
-import sys
 import argparse
-import textwrap
-import itertools
-import subprocess
 import collections
-
+import itertools
+import os
+import subprocess
+import sys
+import textwrap
 from enum import Enum
 from parser import LineType, parse_diff
 
