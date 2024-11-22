@@ -431,7 +431,9 @@ class ByLineFileAnalyzer(object):
                 # dependency
                 if line_state.changed_by:
                     depends[patch][line_state.changed_by] = self.DEPEND_HARD
-                    depends[patch][line_state.changed_by].dottooltip = "-" + change.source_line
+                    # TODO(PHH): Assigning to singleton Depend.*.dottooltip; unused by `depends_dot`
+                    # https://graphviz.org/docs/attrs/tooltip/
+                    # depends[patch][line_state.changed_by].dottooltip = f"-{change.source_line}"
 
                 # Also add proximity deps for patches that touched code
                 # around this line
