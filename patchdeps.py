@@ -296,13 +296,11 @@ class ByLineFileAnalyzer:
             # Found it, return
             if state.lineno == lineno:
                 return state
-            elif state.lineno < lineno:
-                # We're already passed this one, continue looking
-                self.processed_idx += 1
-                continue
-            else:
-                # It's not in there, stop looking
+            # It's not in there, stop looking
+            if state.lineno > lineno:
                 break
+            # We're already passed this one, continue looking
+            self.processed_idx += 1
 
         if not create:
             return None
