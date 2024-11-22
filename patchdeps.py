@@ -243,7 +243,7 @@ class ByLineAnalyzer:
 
         for patch in patches:
             for f in patch.get_patch_set():
-                if not f.path in state:
+                if f.path not in state:
                     state[f.path] = ByLineFileAnalyzer(f.path, args.proximity)
 
                 state[f.path].analyze(depends, patch, f)
@@ -439,7 +439,7 @@ class ByLineFileAnalyzer:
                 # Also add proximity deps for patches that touched code
                 # around this line
                 for p in line_state.proximity:
-                    if (not p in depends[patch]) and p != patch:
+                    if (p not in depends[patch]) and p != patch:
                         depends[patch][p] = Depend.PROXIMITY
 
                 # Forget about the state for this source line
