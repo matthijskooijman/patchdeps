@@ -26,22 +26,21 @@
 # https://github.com/matiasb/python-unidiff)
 
 import re
+from enum import Enum
 
 RE_SOURCE_FILENAME = re.compile(r'^--- (?P<filename>[^\t]+)')
 RE_TARGET_FILENAME = re.compile(r'^\+\+\+ (?P<filename>[^\t]+)')
 
 # @@ (source offset, length) (target offset, length) @@
 RE_HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))?\ @@")
-
-#   kept line (context)
-# + added line
-# - deleted line
-# \ No newline case (ignore)
 RE_HUNK_BODY_LINE = re.compile(r'^([- \+\\])')
 
-LINE_TYPE_ADD = '+'
-LINE_TYPE_DELETE= '-'
-LINE_TYPE_CONTEXT = ' '
+
+class LineType(Enum):
+    ADD = '+'  # added line
+    DELETE= '-'  # deleted line
+    CONTEXT = ' '  # kept line (context)
+    IGNORE = '\\'  # No newline case (ignore)
 
 class UnidiffParseException(Exception):
     pass
@@ -111,15 +110,13 @@ class Hunk:
         """
         self.changes.append(change)
 
-        if (change.action == LINE_TYPE_CONTEXT or
-            change.action == LINE_TYPE_DELETE):
+        if change.action in {LineType.CONTEXT, LineType.DELETE}:
                 self.to_parse[0] -= 1
                 if self.to_parse[0] < 0:
                     raise UnidiffParseException(
                         'To many source lines in hunk: %s' % self)
 
-        if (change.action == LINE_TYPE_CONTEXT or
-            change.action == LINE_TYPE_ADD):
+        if change.action in {LineType.CONTEXT, LineType.ADD}:
                 self.to_parse[1] -= 1
                 if self.to_parse[1] < 0:
                     raise UnidiffParseException(
@@ -138,7 +135,7 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
     for line in diff:
         valid_line = RE_HUNK_BODY_LINE.match(line)
         if valid_line:
-            action = valid_line.group(0)
+            action = LineType(valid_line.group(0))
             original_line = line[1:]
 
             kwargs = dict(action = action,
@@ -148,13 +145,13 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
                           source_line = None,
                           target_line = None)
 
-            if action == LINE_TYPE_ADD:
+            if action == LineType.ADD:
                 kwargs['target_line'] = original_line
                 target_lineno += 1
-            elif action == LINE_TYPE_DELETE:
+            elif action == LineType.DELETE:
                 kwargs['source_line'] = original_line
                 source_lineno += 1
-            elif action == LINE_TYPE_CONTEXT:
+            elif action == LineType.CONTEXT:
                 kwargs['source_line'] = original_line
                 kwargs['target_line'] = original_line
                 source_lineno += 1

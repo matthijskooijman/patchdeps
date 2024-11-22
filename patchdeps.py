@@ -35,8 +35,7 @@ import itertools
 import subprocess
 import collections
 
-from parser import parse_diff
-from parser import LINE_TYPE_ADD, LINE_TYPE_DELETE, LINE_TYPE_CONTEXT
+from parser import LineType, parse_diff
 
 class Bunch:
     def __init__(self, **kwds):
@@ -337,12 +336,12 @@ class ByLineFileAnalyzer:
             # When adding a line, don't bother creating a new line
             # state, since we'll be adding one anyway (this prevents
             # extra unused linestates)
-            create = (change.action != LINE_TYPE_ADD)
+            create = change.action != LineType.ADD
             line_state = self.line_state(change.source_lineno_abs, create)
 
             # When changing a line, claim proximity lines before it as
             # well.
-            if change.action != LINE_TYPE_CONTEXT and self.proximity != 0:
+            if change.action != LineType.CONTEXT and self.proximity != 0:
                 # i points to the only linestate that could contain the
                 # state for lineno
                 i = self.processed_idx - 1
@@ -379,7 +378,7 @@ class ByLineFileAnalyzer:
 
             # For changes that know about the contents of the old line,
             # check if it matches our observations
-            if change.action != LINE_TYPE_ADD:
+            if change.action != LineType.ADD:
                 if (line_state.line is not None and
                     change.source_line != line_state.line):
                         sys.stderr.write("While processing %s\n" % patch)
@@ -390,7 +389,7 @@ class ByLineFileAnalyzer:
                         sys.stderr.write("%s\n\n" % change.source_line)
                         sys.exit(1)
 
-            if change.action == LINE_TYPE_CONTEXT:
+            if change.action == LineType.CONTEXT:
                 if line_state.line is None:
                     line_state.line = change.target_line
 
@@ -398,7 +397,7 @@ class ByLineFileAnalyzer:
                 #claim_after(in_change, change.
                 #in_change = False
 
-            elif change.action == LINE_TYPE_ADD:
+            elif change.action == LineType.ADD:
                 self.update_offset(1)
 
                 # Mark this line as changed by this patch
@@ -423,7 +422,7 @@ class ByLineFileAnalyzer:
                         if p and p not in depends[patch] and p != patch:
                             depends[patch][p] = self.DEPEND_PROXIMITY
 
-            elif change.action == LINE_TYPE_DELETE:
+            elif change.action == LineType.DELETE:
                 self.update_offset(-1)
 
                 # This file was touched by another patch, add
@@ -446,7 +445,7 @@ class ByLineFileAnalyzer:
 
             # After changing a line, claim proximity lines after it as
             # well.
-            if change.action != LINE_TYPE_CONTEXT and self.proximity != 0:
+            if change.action != LineType.CONTEXT and self.proximity != 0:
                 # i points to the only linestate that could contain the
                 # state for lineno
                 i = self.to_update_idx
