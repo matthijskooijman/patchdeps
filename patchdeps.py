@@ -135,12 +135,12 @@ def print_depends_matrix(patches, depends):
     # Which patches have at least one dependency drawn (and thus
     # need lines from then on)?
     has_deps = set()
-    for p in patches:
+    for i, p in enumerate(patches):
         fill, corner = ("─", "┘") if p in has_deps else (" ", " ")
         line = str(p)[:80] + "  "
-        line += fill * (84 - len(line) + p.number * 2) + corner + " "
+        line += fill * (84 - len(line) + i * 2) + corner + " "
 
-        for dep in patches[p.number + 1:]:
+        for dep in patches[i + 1:]:
             # For every later patch, print an "X" if it depends on this
             # one
             if p in depends[dep]:
@@ -172,13 +172,13 @@ overlap=scale
     if args.randomize:
         res += "start=random\n"
 
-    for p in patches:
+    for i, p in enumerate(patches):
         label = dot_escape_string(str(p))
         label = "\\n".join(textwrap.wrap(label, 25))
-        res += """{} [label="{}"]\n""".format(p.number, label)
+        res += """{} [label="{}"]\n""".format(i, label)
         for dep, v in depends[p].items():
             style = v.dotstyle
-            res += """{} -> {} [style={}]\n""".format(dep.number, p.number, style)
+            res += """{} -> {} [style={}]\n""".format(patches.index(dep), i, style)
     res += "}\n"
 
     return res
@@ -565,9 +565,6 @@ def main() -> None:
     args = parse_args()
 
     patches = list(args.changeset_type.get_changesets(args.arguments))
-
-    for i, p in enumerate(patches):
-        p.number = i
 
     depends = args.analyzer().analyze(args, patches)
 
