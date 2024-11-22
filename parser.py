@@ -93,15 +93,14 @@ class Hunk:
 
     def __init__(self, src_start=0, src_len=0, tgt_start=0, tgt_len=0):
         self.source_start = src_start
-        self.source_length = src_len
+        self.source_length = self.source_todo = src_len
         self.target_start = tgt_start
-        self.target_length = tgt_len
+        self.target_length = self.target_todo = tgt_len
         self.changes = []
-        self.to_parse = [self.source_length, self.target_length]
 
     def is_valid(self):
         """Check hunk header data matches entered lines info."""
-        return self.to_parse == [0, 0]
+        return self.source_todo == self.target_todo == 0
 
     def append_line(self, line):
         """
@@ -110,16 +109,16 @@ class Hunk:
         self.changes.append(line)
 
         if line.action in {LineType.CONTEXT, LineType.DELETE}:
-                self.to_parse[0] -= 1
-                if self.to_parse[0] < 0:
-                    raise UnidiffParseError(
-                        f'Too many source lines in hunk: {self}')
+            self.source_todo -= 1
+            if self.source_todo < 0:
+                raise UnidiffParseError(
+                    f'Too many source lines in hunk: {self}')
 
         if line.action in {LineType.CONTEXT, LineType.ADD}:
-                self.to_parse[1] -= 1
-                if self.to_parse[1] < 0:
-                    raise UnidiffParseError(
-                        f'Too many target lines in hunk: {self}')
+            self.target_todo -= 1
+            if self.target_todo < 0:
+                raise UnidiffParseError(
+                    f'Too many target lines in hunk: {self}')
 
     def __str__(self):
         return f"<@@ {self.source_start},{self.source_length} {self.target_start},{self.target_length} @@>"
