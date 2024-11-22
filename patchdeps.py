@@ -542,25 +542,25 @@ def parse_args() -> argparse.Namespace:
                         Instead of outputting patch dependencies,
                         output for each line or file which patch changed
                         it last.""")
-    actions.add_argument('--depends-list', dest='actions', action='append_const',
-                        const='depends-list', help="""
+    actions.add_argument('--list', dest='actions', action='append_const',
+                        const='list', help="""
                         Output a list of each patch and the patches it
                         depends on.""")
-    actions.add_argument('--depends-matrix', dest='actions', action='append_const',
-                        const='depends-matrix', help="""
+    actions.add_argument('--matrix', dest='actions', action='append_const',
+                        const='matrix', help="""
                         Output a matrix with patches on both axis and
                         markings for dependencies. This is used if not
                         action is given.""")
-    actions.add_argument('--depends-dot', dest='actions', action='append_const',
-                        const='depends-dot', help="""
+    actions.add_argument('--dot', dest='actions', action='append_const',
+                        const='dot', help="""
                         Output dot format for a dependency graph.""")
-    actions.add_argument('--depends-xdot', dest='actions', action='append_const',
-                        const='depends-xdot', help="""
+    actions.add_argument('--xdot', dest='actions', action='append_const',
+                        const='xdot', help="""
                         Show a dependencygraph using xdot (if available).""")
 
     args = parser.parse_args()
     if not args.actions:
-        args.actions = ['depends-matrix']
+        args.actions = ['matrix']
 
     return args
 
@@ -575,16 +575,16 @@ def main() -> None:
 
     depends = args.analyzer().analyze(args, patches)
 
-    if 'depends-list' in args.actions:
+    if 'list' in args.actions:
         print_depends(patches, depends)
 
-    if 'depends-matrix' in args.actions:
+    if 'matrix' in args.actions:
         print_depends_matrix(patches, depends)
 
-    if 'depends-dot' in args.actions:
+    if 'dot' in args.actions:
         print(depends_dot(args, patches, depends))
 
-    if 'depends-xdot' in args.actions:
+    if 'xdot' in args.actions:
         show_xdot(depends_dot(args, patches, depends))
 
 if __name__ == "__main__":
