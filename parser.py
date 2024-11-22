@@ -26,7 +26,6 @@
 # https://github.com/matiasb/python-unidiff)
 
 import re
-import itertools
 
 RE_SOURCE_FILENAME = re.compile(r'^--- (?P<filename>[^\t]+)')
 RE_TARGET_FILENAME = re.compile(r'^\+\+\+ (?P<filename>[^\t]+)')
@@ -176,9 +175,8 @@ def parse_diff(diff):
     current_file = None
     # Make sure we only iterate the diff once, instead of restarting
     # from the top inside _parse_hunk
-    diff = itertools.chain(diff)
-
-    for line in diff:
+    lines = iter(diff)
+    for line in lines:
         # check for source file header
         check_source = RE_SOURCE_FILENAME.match(line)
         if check_source:
@@ -202,7 +200,7 @@ def parse_diff(diff):
             for i in (1, 3):
                 if hunk_info[i] is None:
                     hunk_info[i] = 1
-            hunk = _parse_hunk(diff, *hunk_info)
+            hunk = _parse_hunk(lines, *hunk_info)
             current_file.append(hunk)
     return ret
 
