@@ -42,7 +42,8 @@ class Bunch:
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
 
-class Changeset():
+
+class Changeset:
     def get_patch_set(self):
         """
         Returns this changeset as a list of PatchedFiles.
@@ -185,7 +186,8 @@ def show_xdot(dot):
     p.stdin.write(dot.encode('utf-8'))
     p.stdin.close()
 
-class ByFileAnalyzer(object):
+
+class ByFileAnalyzer:
     def analyze(self, args, patches):
         """
         Find dependencies in a list of patches by looking at the files they
@@ -216,7 +218,8 @@ class ByFileAnalyzer(object):
 
         return depends
 
-class ByLineAnalyzer(object):
+
+class ByLineAnalyzer:
     def analyze(self, args, patches):
         """
         Find dependencies in a list of patches by looking at the lines they
@@ -245,7 +248,7 @@ class ByLineAnalyzer(object):
         return depends
 
 
-class ByLineFileAnalyzer(object):
+class ByLineFileAnalyzer:
     """
     Helper class for the ByLineAnalyzer, that performs the analysis for
     a specific file. Created once and called for multiple patches.
@@ -492,7 +495,8 @@ class ByLineFileAnalyzer(object):
 
         print()
 
-    class LineState(object):
+
+    class LineState:
         """ State of a particular line in a file """
         def __init__(self, lineno, line = None, changed_by = None):
             self.lineno = lineno

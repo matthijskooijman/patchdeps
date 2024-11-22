@@ -46,7 +46,8 @@ LINE_TYPE_CONTEXT = ' '
 class UnidiffParseException(Exception):
     pass
 
-class Change(object):
+
+class Change:
     """
     A single line from a patch hunk.
     """
@@ -88,7 +89,8 @@ class PatchedFile(list):
         else:
             self.path = self.source_file
 
-class Hunk(object):
+
+class Hunk:
     """Each of the modified blocks of a file."""
 
     def __init__(self, src_start=0, src_len=0, tgt_start=0, tgt_len=0):
