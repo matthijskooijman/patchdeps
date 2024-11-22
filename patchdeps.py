@@ -100,7 +100,7 @@ class GitRev(Changeset):
         # Convert to utf8 and just drop any invalid characters (we're
         # not interested in the actual file contents and all diff
         # special characters are valid ascii).
-        return str(diff, encoding='utf-8', errors='ignore').split('\n')
+        return diff.decode(errors='ignore').split('\n')
 
     def __str__(self):
         return f"{self.rev} ({self.msg})"
@@ -115,7 +115,7 @@ class GitRev(Changeset):
         if not output:
             sys.stderr.write("No revisions specified?\n")
         else:
-            lines = str(output, encoding='ascii').strip().split('\n')
+            lines = output.decode().strip().split('\n')
             for line in lines:
                 yield GitRev(*line.split(' ', 1))
 
