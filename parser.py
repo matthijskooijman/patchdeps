@@ -47,7 +47,7 @@ class UnidiffParseError(Exception):
     pass
 
 
-class Change:
+class Line:
     """
     A single line from a patch hunk.
     """
@@ -103,19 +103,19 @@ class Hunk:
         """Check hunk header data matches entered lines info."""
         return self.to_parse == [0, 0]
 
-    def append_change(self, change):
+    def append_line(self, line):
         """
-        Append a Change
+        Append a line
         """
-        self.changes.append(change)
+        self.changes.append(line)
 
-        if change.action in {LineType.CONTEXT, LineType.DELETE}:
+        if line.action in {LineType.CONTEXT, LineType.DELETE}:
                 self.to_parse[0] -= 1
                 if self.to_parse[0] < 0:
                     raise UnidiffParseError(
                         f'Too many source lines in hunk: {self}')
 
-        if change.action in {LineType.CONTEXT, LineType.ADD}:
+        if line.action in {LineType.CONTEXT, LineType.ADD}:
                 self.to_parse[1] -= 1
                 if self.to_parse[1] < 0:
                     raise UnidiffParseError(
@@ -156,7 +156,7 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
                 kwargs['target_line'] = original_line
                 source_lineno += 1
                 target_lineno += 1
-            hunk.append_change(Change(**kwargs))
+            hunk.append_line(Line(**kwargs))
         else:
             raise UnidiffParseError(f'Hunk diff data expected: {line}')
 
