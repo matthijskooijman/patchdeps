@@ -192,9 +192,7 @@ def show_xdot(dot):
     """
     Shows a given dot graph in xdot
     """
-    p = subprocess.Popen(['xdot', '/dev/stdin'], stdin=subprocess.PIPE)
-    p.stdin.write(dot.encode('utf-8'))
-    p.stdin.close()
+    subprocess.run(['xdot', '/dev/stdin'], input=dot.encode(), check=True)
 
 
 class ByFileAnalyzer:
