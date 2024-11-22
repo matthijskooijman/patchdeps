@@ -27,6 +27,8 @@
 # http://blog.mozilla.org/sfink/2012/01/05/patch-queue-dependencies/
 #
 
+from __future__ import annotations
+
 import argparse
 import collections
 import itertools
@@ -36,6 +38,10 @@ import sys
 import textwrap
 from enum import Enum
 from parser import LineType, parse_diff
+from typing import TYPE_CHECKING, Iterable, Iterator
+
+if TYPE_CHECKING:
+    from parser import Hunk, PatchedFile
 
 
 class Depend(Enum):
@@ -53,13 +59,13 @@ class Depend(Enum):
 
 
 class Changeset:
-    def get_patch_set(self):
+    def get_patch_set(self) -> list[PatchedFile]:
         """
         Returns this changeset as a list of PatchedFiles.
         """
         return parse_diff(self.get_diff())
 
-    def get_diff(self):
+    def get_diff(self) -> Iterable[str]:
         """
         Returns the textual unified diff for this changeset as an
         iterable of lines
@@ -71,44 +77,44 @@ class Changeset:
 
 
 class PatchFile(Changeset):
-    def __init__(self, filename):
+    def __init__(self, filename: str) -> None:
         self.filename = filename
 
-    def get_diff(self):
+    def get_diff(self) -> Iterable[str]:
         f = open(self.filename, encoding='utf-8')
         # Iterating over a file gives separate lines, with newlines
         # included. We want those stripped off
         return (line.rstrip('\n') for line in f)
 
     @staticmethod
-    def get_changesets(args):
+    def get_changesets(args: Iterable[str]) -> Iterator[PatchFile]:
         """
         Generate Changeset objects, given patch filenamesk
         """
         for filename in args:
             yield PatchFile(filename)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return os.path.basename(self.filename)
 
 
 class GitRev(Changeset):
-    def __init__(self, rev, msg):
+    def __init__(self, rev: str, msg: str) -> None:
         self.rev = rev
         self.msg = msg
 
-    def get_diff(self):
+    def get_diff(self) -> Iterable[str]:
         diff = subprocess.check_output(['git', 'diff', f"{self.rev}^", self.rev])
         # Convert to utf8 and just drop any invalid characters (we're
         # not interested in the actual file contents and all diff
         # special characters are valid ascii).
         return diff.decode(errors='ignore').split('\n')
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.rev} ({self.msg})"
 
     @staticmethod
-    def get_changesets(args):
+    def get_changesets(args: list[str]) -> Iterator[GitRev]:
         """
         Generate Changeset objects, given arguments for git rev-list.
         """
@@ -122,7 +128,7 @@ class GitRev(Changeset):
                 yield GitRev(*line.split(' ', 1))
 
 
-def print_depends(patches, depends):
+def print_depends(patches: list[Changeset], depends: dict[Changeset, dict[Changeset, Depend]]) -> None:
     for p in patches:
         if dependencies := depends[p]:
             print(f"{p} depends on: ")
@@ -135,7 +141,7 @@ def print_depends(patches, depends):
                         print(f"  {dep}")
 
 
-def print_depends_tsort(patches, depends) -> None:
+def print_depends_tsort(patches: list[Changeset], depends: dict[Changeset, dict[Changeset, Depend]]) -> None:
     for p in patches:
         if dependencies := depends[p]:
             for dep in patches:
@@ -143,10 +149,10 @@ def print_depends_tsort(patches, depends) -> None:
                     print(f"{dep}\t{p}")
 
 
-def print_depends_matrix(patches, depends):
+def print_depends_matrix(patches: list[Changeset], depends: dict[Changeset, dict[Changeset, Depend]]) -> None:
     # Which patches have at least one dependency drawn (and thus
     # need lines from then on)?
-    has_deps = set()
+    has_deps: set[Changeset] = set()
     prereq: set[Changeset] = {dep for p in patches for dep in depends[p]}
     # Every patch depending on other patches needs a column
     depending: list[Changeset] = [p for p in patches if depends[p]]
@@ -175,11 +181,11 @@ def print_depends_matrix(patches, depends):
         print(line)
 
 
-def dot_escape_string(s):
+def dot_escape_string(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def depends_dot(args, patches, depends):
+def depends_dot(args: argparse.Namespace, patches: list[Changeset], depends: dict[Changeset, dict[Changeset, Depend]]) -> str:
     """
     Returns dot code for the dependency graph.
     """
@@ -205,7 +211,7 @@ overlap=scale
     return res
 
 
-def show_xdot(dot):
+def show_xdot(dot: str) -> None:
     """
     Shows a given dot graph in xdot
     """
@@ -213,7 +219,7 @@ def show_xdot(dot):
 
 
 class ByFileAnalyzer:
-    def analyze(self, args, patches):
+    def analyze(self, args: argparse.Namespace, patches: list[Changeset]) -> dict[Changeset, dict[Changeset, Depend]]:
         """
         Find dependencies in a list of patches by looking at the files they
         change.
@@ -223,11 +229,11 @@ class ByFileAnalyzer:
         """
         # Which patches touch a particular file. A dict of filename => list
         # of patches
-        touches_file = collections.defaultdict(list)
+        touches_file: dict[str, list[Changeset]] = collections.defaultdict(list)
 
         # Which patch depends on which other patches?
         # A dict of patch => (dict of dependent patches => Depend.FILENAME)
-        depends = collections.defaultdict(dict)
+        depends: dict[Changeset, dict[Changeset, Depend]] = collections.defaultdict(dict)
 
         for patch in patches:
             for f in patch.get_patch_set():
@@ -237,26 +243,26 @@ class ByFileAnalyzer:
                 touches_file[f.path].append(patch)
 
         if 'blame' in args.actions:
-            for f, ps in touches_file.items():
+            for path, ps in touches_file.items():
                 patch = ps[-1]
-                print(f"{patch!s:80.80} {f}")
+                print(f"{patch!s:80.80} {path}")
 
         return depends
 
 
 class ByLineAnalyzer:
-    def analyze(self, args, patches):
+    def analyze(self, args: argparse.Namespace, patches: list[Changeset]) -> dict[Changeset, dict[Changeset, Depend]]:
         """
         Find dependencies in a list of patches by looking at the lines they
         change.
         """
         # Per-file info on which patch last touched a particular line.
         # A dict of file => list of LineState objects
-        state = dict()
+        state: dict[str, ByLineFileAnalyzer] = {}
 
         # Which patch depends on which other patches?
         # A dict of patch => (dict of dependent patches => Depend)
-        depends = collections.defaultdict(dict)
+        depends: dict[Changeset, dict[Changeset, Depend]] = collections.defaultdict(dict)
 
         for patch in patches:
             for f in patch.get_patch_set():
@@ -278,12 +284,12 @@ class ByLineFileAnalyzer:
     a specific file. Created once per file and called for multiple patches.
     """
 
-    def __init__(self, fname, proximity):
+    def __init__(self, fname: str, proximity: int) -> None:
         self.fname = fname
         self.proximity = proximity
-        self.line_list = []
+        self.line_list: list[ByLineFileAnalyzer.LineState] = []
 
-    def analyze(self, depends, patch, hunks):
+    def analyze(self, depends: dict[Changeset, dict[Changeset, Depend]], patch: Changeset, hunks: PatchedFile) -> None:
         # This is the index in line_list of the first line state that
         # still uses source line numbers
         self.to_update_idx = 0
@@ -304,7 +310,7 @@ class ByLineFileAnalyzer:
         self.processed_idx = len(self.line_list)
         self.update_offset(0)
 
-    def line_state(self, lineno, create):
+    def line_state(self, lineno: int, create: bool) -> LineState | None:
         """
         Returns the state of the given (source) line number, creating a
         new empty state if it is not yet present and create is True.
@@ -330,7 +336,7 @@ class ByLineFileAnalyzer:
         self.line_list.insert(self.processed_idx, state)
         return state
 
-    def update_offset(self, amount):
+    def update_offset(self, amount: int) -> None:
         """
         Update the offset between target and source lines by the
         specified amount.
@@ -346,7 +352,7 @@ class ByLineFileAnalyzer:
 
         self.offset += amount
 
-    def analyze_hunk(self, depends, patch, hunk):
+    def analyze_hunk(self, depends: dict[Changeset, dict[Changeset, Depend]], patch: Changeset, hunk: Hunk) -> None:
         #print('\n'.join(map(str, self.line_list)))
         #print('--')
         for change in hunk.changes:
@@ -396,6 +402,7 @@ class ByLineFileAnalyzer:
             # For changes that know about the contents of the old line,
             # check if it matches our observations
             if change.action != LineType.ADD:
+                assert line_state is not None
                 if line_state.line is not None and change.source_line != line_state.line:
                     sys.exit(
                         f"While processing {patch}\n"
@@ -407,6 +414,7 @@ class ByLineFileAnalyzer:
                     )
 
             if change.action == LineType.CONTEXT:
+                assert line_state is not None
                 if line_state.line is None:
                     line_state.line = change.target_line
 
@@ -440,6 +448,7 @@ class ByLineFileAnalyzer:
                             depends[patch][p] = Depend.PROXIMITY
 
             elif change.action == LineType.DELETE:
+                assert line_state is not None
                 self.update_offset(-1)
 
                 # This file was touched by another patch, add dependency
@@ -479,9 +488,9 @@ class ByLineFileAnalyzer:
                     i += 1
                     lineno += 1
 
-    def print_blame(self):
+    def print_blame(self) -> None:
         print(f"{self.fname}:")
-        next_line = None
+        next_line: int | None = None
         for line_state in self.line_list:
             if line_state.line is None:
                 continue
@@ -497,14 +506,14 @@ class ByLineFileAnalyzer:
 
     class LineState:
         """ State of a particular line in a file """
-        def __init__(self, lineno, line = None, changed_by = None):
+        def __init__(self, lineno: int, line: str | None = None, changed_by: Changeset | None = None) -> None:
             self.lineno = lineno
             self.line = line
             self.changed_by = changed_by
             # Set of patches that changed lines near this one
-            self.proximity = set()
+            self.proximity: set[Changeset] = set()
 
-        def __str__(self):
+        def __str__(self) -> str:
             return f"{self.lineno}: changed by {self.changed_by}: {self.line}"
 
 
@@ -578,7 +587,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    patches = list(args.changeset_type.get_changesets(args.arguments))
+    patches: list[Changeset] = list(args.changeset_type.get_changesets(args.arguments))
 
     depends = args.analyzer().analyze(args, patches)
 

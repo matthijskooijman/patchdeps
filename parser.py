@@ -30,8 +30,11 @@
 # For each "PatchedFile" the patch consists of multiple "Hunks"
 # Each "Hunk" concists of multiple "Lines" being "context or change" (LineType)
 
+from __future__ import annotations
+
 import re
 from enum import Enum
+from typing import Any, Iterable, Iterator
 
 RE_SOURCE_FILENAME = re.compile(r'^--- (?P<filename>[^\t]+)')
 RE_TARGET_FILENAME = re.compile(r'^\+\+\+ (?P<filename>[^\t]+)')
@@ -56,8 +59,15 @@ class Line:
     """
     A single line from a patch hunk.
     """
-    def __init__(self, hunk, action, source_lineno_rel, source_line,
-                 target_lineno_rel, target_line):
+    def __init__(
+        self,
+        hunk: Hunk,
+        action: LineType,
+        source_lineno_rel: int,
+        source_line: str | None,
+        target_lineno_rel: int,
+        target_line: str | None,
+    ) -> None:
         """
         The line numbers must always be present, either source_line or
         target_line can be None depending on the action.
@@ -72,14 +82,14 @@ class Line:
         self.source_lineno_abs = self.hunk.source_start + self.source_lineno_rel
         self.target_lineno_abs = self.hunk.target_start + self.target_lineno_rel
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"(-{self.source_lineno_abs}, +{self.target_lineno_abs}) {self.action}{self.source_line or self.target_line}"
 
 
-class PatchedFile(list):
+class PatchedFile(list["Hunk"]):
     """Data from a patched file."""
 
-    def __init__(self, source='', target=''):
+    def __init__(self, source: str = '', target: str = '') -> None:
         self.source_file = source
         self.target_file = target
 
@@ -96,21 +106,19 @@ class PatchedFile(list):
 class Hunk:
     """Each of the modified blocks of a file."""
 
-    def __init__(self, src_start=0, src_len=0, tgt_start=0, tgt_len=0):
+    def __init__(self, src_start: int = 0, src_len: int = 0, tgt_start: int = 0, tgt_len: int = 0) -> None:
         self.source_start = src_start
         self.source_length = self.source_todo = src_len
         self.target_start = tgt_start
         self.target_length = self.target_todo = tgt_len
-        self.changes = []
+        self.changes: list[Line] = []
 
-    def is_valid(self):
+    def is_valid(self) -> bool:
         """Check hunk header data matches entered lines info."""
         return self.source_todo == self.target_todo == 0
 
-    def append_line(self, line):
-        """
-        Append a line
-        """
+    def append_line(self, line: Line) -> None:
+        """Append a line."""
         self.changes.append(line)
 
         if line.action in {LineType.CONTEXT, LineType.DELETE}:
@@ -125,11 +133,17 @@ class Hunk:
                 raise UnidiffParseError(
                     f'Too many target lines in hunk: {self}')
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"<@@ {self.source_start},{self.source_length} {self.target_start},{self.target_length} @@>"
 
 
-def _parse_hunk(diff, source_start, source_len, target_start, target_len):
+def _parse_hunk(
+    diff: Iterator[str],
+    source_start: int,
+    source_len: int,
+    target_start: int,
+    target_len: int,
+) -> Hunk:
     hunk = Hunk(source_start, source_len, target_start, target_len)
     source_lineno = 0
     target_lineno = 0
@@ -171,8 +185,9 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
     return hunk
 
 
-def parse_diff(diff):
-    ret = []
+def parse_diff(diff: Iterable[str]) -> list[PatchedFile]:
+    ret: list[PatchedFile] = []
+
     # Make sure we only iterate the diff once, instead of restarting
     # from the top inside _parse_hunk
     lines = iter(diff)
