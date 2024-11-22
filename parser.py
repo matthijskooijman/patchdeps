@@ -173,23 +173,13 @@ def parse_diff(diff):
     # from the top inside _parse_hunk
     lines = iter(diff)
     for line in lines:
-        # check for source file header
-        check_source = RE_SOURCE_FILENAME.match(line)
-        if check_source:
-            source_file = check_source.group('filename')
-            continue
-
-        # check for target file header
-        check_target = RE_TARGET_FILENAME.match(line)
-        if check_target:
-            target_file = check_target.group('filename')
+        if m := RE_SOURCE_FILENAME.match(line):
+            source_file = m['filename']
+        elif m := RE_TARGET_FILENAME.match(line):
+            target_file = m['filename']
             current_file = PatchedFile(source_file, target_file)
             ret.append(current_file)
-            continue
-
-        # check for hunk header
-        m = RE_HUNK_HEADER.match(line)
-        if m:
+        elif m := RE_HUNK_HEADER.match(line):
             hunk = _parse_hunk(
                 lines,
                 int(m[1]),
