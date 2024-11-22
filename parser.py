@@ -43,7 +43,7 @@ class LineType(Enum):
     IGNORE = '\\'  # No newline case (ignore)
 
 
-class UnidiffParseException(Exception):
+class UnidiffParseError(Exception):
     pass
 
 
@@ -112,13 +112,13 @@ class Hunk:
         if change.action in {LineType.CONTEXT, LineType.DELETE}:
                 self.to_parse[0] -= 1
                 if self.to_parse[0] < 0:
-                    raise UnidiffParseException(
+                    raise UnidiffParseError(
                         f'Too many source lines in hunk: {self}')
 
         if change.action in {LineType.CONTEXT, LineType.ADD}:
                 self.to_parse[1] -= 1
                 if self.to_parse[1] < 0:
-                    raise UnidiffParseException(
+                    raise UnidiffParseError(
                         f'Too many target lines in hunk: {self}')
 
     def __str__(self):
@@ -158,7 +158,7 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
                 target_lineno += 1
             hunk.append_change(Change(**kwargs))
         else:
-            raise UnidiffParseException(f'Hunk diff data expected: {line}')
+            raise UnidiffParseError(f'Hunk diff data expected: {line}')
 
         # check hunk len(old_lines) and len(new_lines) are ok
         if hunk.is_valid():
