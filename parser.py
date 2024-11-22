@@ -136,12 +136,14 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
             action = LineType(valid_line.group(0))
             original_line = line[1:]
 
-            kwargs = dict(action = action,
-                          hunk = hunk,
-                          source_lineno_rel = source_lineno,
-                          target_lineno_rel = target_lineno,
-                          source_line = None,
-                          target_line = None)
+            kwargs: dict[str, Any] = {
+                "action": action,
+                "hunk": hunk,
+                "source_lineno_rel": source_lineno,
+                "target_lineno_rel": target_lineno,
+                "source_line": None,
+                "target_line": None,
+            }
 
             if action == LineType.ADD:
                 kwargs['target_line'] = original_line
