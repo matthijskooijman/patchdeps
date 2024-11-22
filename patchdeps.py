@@ -108,7 +108,7 @@ class GitRev(Changeset):
         """
         Generate Changeset objects, given arguments for git rev-list.
         """
-        output = subprocess.check_output(['git', 'rev-list', '--oneline', '--reverse'] + args)
+        output = subprocess.check_output(['git', 'rev-list', '--oneline', '--reverse', *args])
 
         if not output:
             sys.stderr.write("No revisions specified?\n")
