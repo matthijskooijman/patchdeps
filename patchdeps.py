@@ -371,10 +371,10 @@ class ByLineFileAnalyzer:
                     # prevent us from i becoming < to_update_idx - 1,
                     # since the state at to_update_idx - 1 should always
                     # be claimed
-                    if patch.number in s.proximity or s.changed_by == patch:
+                    if patch in s.proximity or s.changed_by == patch:
                         break
 
-                    s.proximity[patch.number] = patch
+                    s.proximity.add(patch)
                     i -= 1
                     lineno -= 1
 
@@ -418,7 +418,7 @@ class ByLineFileAnalyzer:
                 # an 'add' change, since we don't actually touch any
                 # existing code
                 if line_state:
-                    deps = itertools.chain(line_state.proximity.values(),
+                    deps = itertools.chain(line_state.proximity,
                                            [line_state.changed_by])
                     for p in deps:
                         if p and p not in depends[patch] and p != patch:
@@ -437,7 +437,7 @@ class ByLineFileAnalyzer:
 
                 # Also add proximity deps for patches that touched code
                 # around this line
-                for p in line_state.proximity.values():
+                for p in line_state.proximity:
                     if (not p in depends[patch]) and p != patch:
                         depends[patch][p] = Depend.PROXIMITY
 
@@ -464,7 +464,7 @@ class ByLineFileAnalyzer:
                             assert i > self.processed_idx, "Inserting before already processed line"
 
                     # Claim this line
-                    self.line_list[i].proximity[patch.number] = patch
+                    self.line_list[i].proximity.add(patch)
 
                     i += 1
                     lineno += 1
@@ -499,9 +499,8 @@ class ByLineFileAnalyzer:
             self.lineno = lineno
             self.line = line
             self.changed_by = changed_by
-            # Dict of patch number => patch for patches that changed
-            # lines near this one
-            self.proximity = {}
+            # Set of patches that changed lines near this one
+            self.proximity = set()
 
         def __str__(self):
             return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
