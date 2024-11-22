@@ -93,10 +93,10 @@ class Hunk:
     """Each of the modified blocks of a file."""
 
     def __init__(self, src_start=0, src_len=0, tgt_start=0, tgt_len=0):
-        self.source_start = int(src_start)
-        self.source_length = int(src_len)
-        self.target_start = int(tgt_start)
-        self.target_length = int(tgt_len)
+        self.source_start = src_start
+        self.source_length = src_len
+        self.target_start = tgt_start
+        self.target_length = tgt_len
         self.changes = []
         self.to_parse = [self.source_length, self.target_length]
 
@@ -188,14 +188,18 @@ def parse_diff(diff):
             continue
 
         # check for hunk header
-        re_hunk_header = RE_HUNK_HEADER.match(line)
-        if re_hunk_header:
-            hunk_info = list(re_hunk_header.groups())
-            # If the hunk length is 1, it is sometimes left out
-            for i in (1, 3):
-                if hunk_info[i] is None:
-                    hunk_info[i] = 1
-            hunk = _parse_hunk(lines, *hunk_info)
+        m = RE_HUNK_HEADER.match(line)
+        if m:
+            hunk = _parse_hunk(
+                lines,
+                int(m[1]),
+                _int1(m[2]),
+                int(m[3]),
+                _int1(m[4]),
+            )
             current_file.append(hunk)
     return ret
 
+
+def _int1(s: str) -> int:
+    return 1 if s is None else int(s)
