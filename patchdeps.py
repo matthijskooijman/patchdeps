@@ -94,14 +94,14 @@ class GitRev(Changeset):
         self.msg = msg
 
     def get_diff(self):
-        diff = subprocess.check_output(['git', 'diff', self.rev + '^', self.rev])
+        diff = subprocess.check_output(['git', 'diff', f"{self.rev}^", self.rev])
         # Convert to utf8 and just drop any invalid characters (we're
         # not interested in the actual file contents and all diff
         # special characters are valid ascii).
         return str(diff, encoding='utf-8', errors='ignore').split('\n')
 
     def __str__(self):
-        return "%s (%s)" % (self.rev, self.msg)
+        return f"{self.rev} ({self.msg})"
 
     @staticmethod
     def get_changesets(args):
@@ -122,14 +122,14 @@ def print_depends(patches, depends):
     for p in patches:
         if not depends[p]:
             continue
-        print("%s depends on: " % p)
+        print(f"{p} depends on: ")
         for dep in patches:
             if dep in depends[p]:
                 desc = depends[p][dep].desc
                 if desc:
-                    print("  %s (%s)" % (dep, desc))
+                    print(f"  {dep} ({desc})")
                 else:
-                    print("  %s" % dep)
+                    print(f"  {dep}")
 
 def print_depends_matrix(patches, depends):
     # Which patches have at least one dependency drawn (and thus
@@ -175,10 +175,9 @@ overlap=scale
     for i, p in enumerate(patches):
         label = dot_escape_string(str(p))
         label = "\\n".join(textwrap.wrap(label, 25))
-        res += """{} [label="{}"]\n""".format(i, label)
+        res += f'{i} [label="{label}"]\n'
         for dep, v in depends[p].items():
-            style = v.dotstyle
-            res += """{} -> {} [style={}]\n""".format(patches.index(dep), i, style)
+            res += f"{patches.index(dep)} -> {i} [style={v.dotstyle}]\n"
     res += "}\n"
 
     return res
@@ -217,7 +216,7 @@ class ByFileAnalyzer:
         if 'blame' in args.actions:
             for f, ps in touches_file.items():
                 patch = ps[-1]
-                print("{!s:80} {}".format(str(patch)[:80], f))
+                print(f"{patch!s:80.80} {f}")
 
         return depends
 
@@ -378,13 +377,14 @@ class ByLineFileAnalyzer:
             if change.action != LineType.ADD:
                 if (line_state.line is not None and
                     change.source_line != line_state.line):
-                        sys.stderr.write("While processing %s\n" % patch)
-                        sys.stderr.write("Warning: patch does not apply cleanly! Results are probably wrong!\n")
-                        sys.stderr.write("According to previous patches, line %s is:\n" % change.source_lineno_abs)
-                        sys.stderr.write("%s\n" % line_state.line)
-                        sys.stderr.write("But according to %s, it should be:\n" % patch)
-                        sys.stderr.write("%s\n\n" % change.source_line)
-                        sys.exit(1)
+                    sys.exit(
+                        f"While processing {patch}\n"
+                        "Warning: patch does not apply cleanly! Results are probably wrong!\n"
+                        f"According to previous patches, line {change.source_lineno_abs} is:\n"
+                        f"{line_state.line}\n"
+                        f"But according to {patch}, it should be:\n"
+                        f"{change.source_line}\n\n",
+                    )
 
             if change.action == LineType.CONTEXT:
                 if line_state.line is None:
@@ -465,24 +465,16 @@ class ByLineFileAnalyzer:
                     lineno += 1
 
     def print_blame(self):
-        print("{}:".format(self.fname))
+        print(f"{self.fname}:")
         next_line = None
         for line_state in self.line_list:
             if line_state.line is None:
                 continue
 
             if next_line and line_state.lineno != next_line:
-                for _ in range(3):
-                    print("{:50}    .".format(""))
+                print(f"{'':50}    …")
 
-            patch = line_state.changed_by
-            # For lines that only appeared as context
-            if not patch:
-                patch = ""
-
-            print("{:50} {:4} {}".format(str(patch)[:50],
-                                         line_state.lineno,
-                                         line_state.line))
+            print(f"{line_state.changed_by or ''!s:50.50} {line_state.lineno:4} {line_state.line}")
             next_line = line_state.lineno + 1
 
         print()
@@ -498,7 +490,7 @@ class ByLineFileAnalyzer:
             self.proximity = set()
 
         def __str__(self):
-            return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
+            return f"{self.lineno}: changed by {self.changed_by}: {self.line}"
 
 
 def parse_args() -> argparse.Namespace:

@@ -67,10 +67,7 @@ class Change:
         self.target_lineno_abs =  self.hunk.target_start + self.target_lineno_rel
 
     def __str__(self):
-        return "(-%s, +%s) %s%s" % (self.source_lineno_abs,
-                                    self.target_lineno_abs,
-                                    self.action,
-                                    self.source_line or self.target_line)
+        return f"(-{self.source_lineno_abs}, +{self.target_lineno_abs}) {self.action}{self.source_line or self.target_line}"
 
 class PatchedFile(list):
     """Data from a patched file."""
@@ -114,17 +111,16 @@ class Hunk:
                 self.to_parse[0] -= 1
                 if self.to_parse[0] < 0:
                     raise UnidiffParseException(
-                        'To many source lines in hunk: %s' % self)
+                        f'Too many source lines in hunk: {self}')
 
         if change.action in {LineType.CONTEXT, LineType.ADD}:
                 self.to_parse[1] -= 1
                 if self.to_parse[1] < 0:
                     raise UnidiffParseException(
-                        'To many target lines in hunk: %s' % self)
+                        f'Too many target lines in hunk: {self}')
 
     def __str__(self):
-        return "<@@ %d,%d %d,%d @@>" % (self.source_start, self.source_length,
-                                        self.target_start, self.target_length)
+        return f"<@@ {self.source_start},{self.source_length} {self.target_start},{self.target_length} @@>"
 
 
 def _parse_hunk(diff, source_start, source_len, target_start, target_len):
@@ -158,7 +154,7 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
                 target_lineno += 1
             hunk.append_change(Change(**kwargs))
         else:
-            raise UnidiffParseException('Hunk diff data expected: ' + line)
+            raise UnidiffParseException(f'Hunk diff data expected: {line}')
 
         # check hunk len(old_lines) and len(new_lines) are ok
         if hunk.is_valid():
