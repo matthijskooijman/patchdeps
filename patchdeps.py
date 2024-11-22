@@ -506,7 +506,7 @@ class ByLineFileAnalyzer:
             return "%s: changed by %s: %s" % (self.lineno, self.changed_by, self.line)
 
 
-def main():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Analyze patches for dependencies.')
     types = parser.add_argument_group('type').add_mutually_exclusive_group(required=True)
     types.add_argument('--git', dest='changeset_type', action='store_const',
@@ -562,6 +562,12 @@ def main():
     args = parser.parse_args()
     if not args.actions:
         args.actions = ['depends-matrix']
+
+    return args
+
+
+def main() -> None:
+    args = parse_args()
 
     patches = list(args.changeset_type.get_changesets(args.arguments))
 
