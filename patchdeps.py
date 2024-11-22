@@ -66,6 +66,9 @@ class Changeset:
         """
         raise NotImplementedError
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self!s})"
+
 
 class PatchFile(Changeset):
     def __init__(self, filename):
