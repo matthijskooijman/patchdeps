@@ -148,13 +148,12 @@ def print_depends_matrix(patches, depends):
             # For every later patch, print an "X" if it depends on this
             # one
             if p in depends[dep]:
-                line += depends[dep][p].matrixmark
+                line += " " + depends[dep][p].matrixmark
                 has_deps.add(dep)
             elif dep in has_deps:
-                line += "|"
+                line += " |"
             else:
-                line += " "
-            line += " "
+                line += "  "
 
         print(line)
 
