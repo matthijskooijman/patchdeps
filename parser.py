@@ -25,6 +25,11 @@
 # This file is based on the unidiff library by Matías Bordese (at
 # https://github.com/matiasb/python-unidiff)
 
+# A "Changeset" consists of multiple "PatchFiles" / commits (GitRev)
+# A single patch(-file)/commit affects a "set of PatchedFiles"
+# For each "PatchedFile" the patch consists of multiple "Hunks"
+# Each "Hunk" concists of multiple "Lines" being "context or change" (LineType)
+
 import re
 from enum import Enum
 
