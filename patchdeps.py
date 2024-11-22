@@ -263,10 +263,7 @@ class ByLineFileAnalyzer:
     def __init__(self, fname, proximity):
         self.fname = fname
         self.proximity = proximity
-        # Keep two view on our line state, so we can both iterate them
-        # in order and do quick lookups
         self.line_list = []
-        self.line_dict = {}
 
     def analyze(self, depends, patch, hunks):
         # This is the index in line_list of the first line state that

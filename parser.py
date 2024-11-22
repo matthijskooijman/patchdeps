@@ -132,8 +132,6 @@ class Hunk:
 
 def _parse_hunk(diff, source_start, source_len, target_start, target_len):
     hunk = Hunk(source_start, source_len, target_start, target_len)
-    modified = 0
-    deleting = 0
     source_lineno = 0
     target_lineno = 0
 
