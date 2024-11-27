@@ -56,16 +56,34 @@ class Changeset():
         """
         raise NotImplementedError
 
+    def parent_for_unchanged_file(self, path):
+        """
+        Find out which parent(s) to use for a file that did not appear
+        in the diff output. Returns an iterable of indices into
+        self.parents of all parents that have the same version of the
+        file as this changeset. Returns multiple parents because nh
+        """
+        raise NotImplementedError
+
 class PatchFile(Changeset):
     def __init__(self, number, filename):
         self.filename = filename
         self.id = number
+        # History for patches is always linear. These might generate
+        # out-of-bounds indices for the first and last patch, but the
+        # rest of the code should handle that.
+        self.parents = [number - 1]
+        self.children = [number + 1]
 
     def get_diff(self):
         f = open(self.filename, 'r', encoding='utf-8')
         # Iterating over a file gives separate lines, with newlines
         # included. We want those stripped off
         return map(lambda x: x.rstrip('\n'), f)
+
+    def parent_for_unchanged_file(self, path):
+        # We always have only one parent
+        return 0
 
     @staticmethod
     def get_changesets(args):
@@ -87,23 +105,77 @@ class GitRev(Changeset):
         self.parents = parents
         self.children = children
         self.msg = msg
+        self.path_blob_map = None
 
     def get_diff(self):
-        diff = subprocess.check_output(['git', 'diff-tree', '-p', self.id])
+        print(self)
+        diff = subprocess.check_output(['git', 'diff-tree', '-p', '-c', self.id])
         # Convert to utf8 and just drop any invalid characters (we're
         # not interested in the actual file contents and all diff
         # special characters are valid ascii).
         return str(diff, encoding='utf-8', errors='ignore').split('\n')
 
+    def get_path_blob_maps(self):
+        """
+        For each of our parents commits and this commit itself, find out
+        what is the sha of the blob that contains the contents of each
+        file contained in this revision.
+        Returns (selfmap, parentmaps) containing a dict and list of
+        dicts respectively, where each dict maps a pathname to a blob
+        sha.
+        """
+        if self.path_blob_map is None:
+            self.path_blob_map = (
+                GitRev.get_path_blob_map_for_rev(self.fullrev),
+                [GitRev.get_path_blob_map_for_rev(p) for p in self.parents]
+            )
+
+        return self.path_blob_map
+
+    def parent_for_unchanged_file(self, path):
+        # This is interesting for merge commits only, since a file only
+        # appears in the diff if it was changed by _all_ parents.
+        # Otherwise, we should find out from which parent it was taken
+        # without changes, so the analyzer can just copy the state from
+        # that parent. The below code also handles the case where the
+        # object is no longer present 
+        self_map, parent_maps = self.get_path_blob_maps()
+        blob_sha = self_map.get(path, None)
+        for i, parent_map in enumerate(parent_maps):
+            if parent_map.get(path, None) == blob_sha:
+            is
+                return i
+
+        sys.stderr.write("While processing %s\n" % self)
+        sys.stderr.write("Warning: Generated diff did not contain changes\n")
+        sys.stderr.write("for file '%s',\n" % path)
+        sys.stderr.write("but blob shas indicate it is different from all parent\n")
+        sys.stderr.write("commits. This should not happen...\n")
+        sys.exit(1)
+
     def __str__(self):
         return "%s (%s)" % (self.rev, self.msg)
+
+    @staticmethod
+    def get_path_blob_map_for_rev(rev):
+        """
+        Returns a dict mapping all pathnames in the given revision to the
+        corresponding blob sha.
+        """
+        result = {}
+        output = subprocess.check_output(['git', 'ls-tree', '--full-tree', '-r', rev])
+        lines = str(diff, encoding='utf-8', errors='ignore').split('\n')
+        for line in lines:
+            mode, typ, sha, path = line.split(maxsplit=3)
+            result[path] = sha
+        return result
 
     @staticmethod
     def get_changesets(args):
         """
         Generate Changeset objects, given arguments for git rev-list.
         """
-        output = subprocess.check_output(['git', 'rev-list', '--children', '--pretty=%h,%p,%s', '--reverse'] + args)
+        output = subprocess.check_output(['git', 'rev-list', '--topo-order', '--children', '--pretty=%h,%P,%s', '--reverse'] + args)
 
         if not output:
             sys.stderr.write("No revisions specified?\n")
@@ -117,7 +189,7 @@ class GitRev(Changeset):
                 _, sha, *children = first.group().strip().split()
                 # Second line has the pretty format, so
                 # "[short sha],[short sha of parents],[message]"
-                short, strparents, msg = second.group().strip().split(',')
+                short, strparents, msg = second.group().strip().split(',', 2)
                 parents = strparents.split()
                 yield GitRev(sha, short, parents, children, msg)
 
@@ -199,6 +271,48 @@ def show_xdot(dot):
     p.stdin.write(dot.encode('utf-8'))
     p.stdin.close()
 
+class AnalyzeState:
+    """
+    Dictionary-like object that contains values that can be popped
+    multiple times before they are actually removed.
+    """
+    def __init__(self):
+        self.values = {}
+
+    def add(self, key, value, count):
+        """
+        Add a key value pair, which should be popped count times before
+        being removed.
+        """
+        self.values[key] = (value, count)
+
+    def pop(self, key, default = None):
+        """
+        Gets the value for the given key and if the count has been
+        reached, delete it.
+        If the key is not present, returns default.
+        """
+        try:
+            value, count = self.values[key]
+        except KeyError:
+            return default
+        if count == 1:
+            del self.values[key]
+        else:
+            self.values[key] = (value, count - 1)
+        return value
+
+    def count(self, key):
+        """
+        Returns how many more times the given key must be popped before
+        being removed.
+        If the key is not present, returns None.
+        """
+        try:
+            return self.values[key][1]
+        except KeyError:
+            return None
+
 class ByFileAnalyzer(object):
     def analyze(self, args, patches):
         """
@@ -208,30 +322,62 @@ class ByFileAnalyzer(object):
         The algorithm is simple: Just keep a list of files changed, and mark
         two patches as conflicting when they change the same file.
         """
-        # Which patches touch a particular file. A dict of filename => list
-        # of patches
-        touches_file = collections.defaultdict(list)
+        # Which patches touch a particular file. A dict of patch id =>
+        # (state after that patch, usage count), where the state is
+        # again a dict of filename => list of patches that touch that
+        # file and usage count is the number of times the state still
+        # needs to be used (e.g., the number of unprocessed children)
+        states = AnalyzeState()
 
         # Which patch depends on which other patches? A dict of
-        # patch => (list of dependency patches)
+        # patch => (dict of dependency patch => True)
         depends = collections.defaultdict(dict)
 
-        for patch in patches:
-            for f in patch.get_patch_set():
-                for other in touches_file[f.path]:
-                    depends[patch][other] = True
+        for p in patches:
+            if len(p.parents) == 1 and states.count(p.parents[0]) == 1:
+                # This patch has a single parent, whose state we don't
+                # need anymore after this. Just take that state.
+                state = states.pop(p.parents[0])
+            else:
+                # This patch has multiple parents or a single parent
+                # whose state we still need later. Merge all parent
+                # states into a single new state.
+                state = collections.defaultdict(collections.OrderedDict)
+                for parent in p.parents:
+                    for f, touching in states.pop(parent, {}).items():
+                        # For merge commits, this makes blame state a
+                        # bit arbitrary, but well...
+                        state[f].update(touching)
+
+            # Iterate over the files touched by the current patch
+            for f in p.get_patch_set():
+                # Add dependencies for any file previously touched by
+                # another patch
+                for other in state[f.path].values():
+                    depends[p][other] = True
 
                 if f.delete_file:
+                    # Delete the state for a delete file
                     del touches_file[f.path]
                 else:
-                    touches_file[f.path].append(patch)
+                    # And note that we touch this file
+                    state[f.path][p.id] = p
+
+            # Remember our new state. The number of children of the
+            # current patch is how often we'll need this state
+            states.add(p.id, state, len(p.children))
 
         if 'blame' in args.actions:
-            for f, ps in touches_file.items():
-                patch = ps[-1]
-                print("{!s:80} {}".format(str(patch)[:80], f))
+            # Use the last state from the loop to print blame info 
+            self.print_blame(state)
 
         return depends
+
+    def print_blame(self, state):
+        for f, ps in state.items():
+            _, patch = ps.popitem()
+            print("{!s:80} {}".format(str(patch)[:80], f))
+
 
 class ByLineAnalyzer(object):
     def analyze(self, args, patches):
