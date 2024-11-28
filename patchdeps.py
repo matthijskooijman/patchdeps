@@ -149,7 +149,10 @@ def print_depends_tsort(patches: list[Changeset], depends: dict[Changeset, dict[
         if dependencies := depends[p]:
             for dep in patches:
                 if dep in dependencies:
-                    print(f"{dep}\t{p}")
+                    def no_delim(x):
+                        # Tsort source has: #define DELIM " \t\n"
+                        return str(x).replace(' ', '_').replace('\t', '_').replace('\n', '_')
+                    print(f"{no_delim(dep)}\t{no_delim(p)}")
 
 
 def print_depends_matrix(patches: list[Changeset], depends: dict[Changeset, dict[Changeset, Depend]]) -> None:
