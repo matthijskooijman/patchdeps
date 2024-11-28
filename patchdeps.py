@@ -63,7 +63,10 @@ class Changeset:
         """
         Returns this changeset as a list of PatchedFiles.
         """
-        return parse_diff(self.get_diff())
+        parsed = parse_diff(self.get_diff())
+        if not parsed:
+            sys.stderr.write(f"WARNING: Parsing diff {self} produced no patch hunks, maybe format is invalid?\n")
+        return parsed
 
     def get_diff(self) -> Iterable[str]:
         """
