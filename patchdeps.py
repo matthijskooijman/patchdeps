@@ -145,11 +145,15 @@ def print_depends(patches: list[Changeset], depends: dict[Changeset, dict[Change
 
 
 def print_depends_tsort(patches: list[Changeset], depends: dict[Changeset, dict[Changeset, Depend]]) -> None:
+    def replace_delims(x: Changeset) -> str:
+        # Tsort source has: #define DELIM " \t\n"
+        return str(x).translate(str.maketrans(" \t\n", "___"))
+
     for p in patches:
         if dependencies := depends[p]:
             for dep in patches:
                 if dep in dependencies:
-                    print(f"{dep}\t{p}")
+                    print(f"{replace_delims(dep)}\t{replace_delims(p)}")
 
 
 def print_depends_matrix(patches: list[Changeset], depends: dict[Changeset, dict[Changeset, Depend]]) -> None:
