@@ -131,7 +131,7 @@ class GitRev(Changeset):
 def print_depends(patches: list[Changeset], depends: dict[Changeset, dict[Changeset, Depend]]) -> None:
     for p in patches:
         if dependencies := depends[p]:
-            print(f"{p} depends on: ")
+            print(f"{p} depends on:")
             for dep in patches:
                 if dependency := dependencies.get(dep):
                     desc = dependency.desc
