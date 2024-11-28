@@ -107,7 +107,7 @@ class GitRev(Changeset):
         self.msg = msg
 
     def get_diff(self) -> Iterable[str]:
-        diff = subprocess.check_output(['git', 'diff', f"{self.rev}^", self.rev])
+        diff = subprocess.check_output(['git', 'diff', '--no-color', f"{self.rev}^", self.rev])
         # Convert to utf8 and just drop any invalid characters (we're
         # not interested in the actual file contents and all diff
         # special characters are valid ascii).
