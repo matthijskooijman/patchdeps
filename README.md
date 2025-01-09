@@ -59,67 +59,55 @@ means the later patch changes a line within two lines of a line changed
 by the earlier patch (number of lines can be configured with the
 `--proximity` flag).
 
-	$ patchdeps --git 6643668..c496aed --depends-list --depends-matrix
-	b4f0a76 (staging: dwc2: unshift non-bool register value constants) depends on: 
-	  22cbead (staging: dwc2: add helper variable to simplify code) (hard)
-	26f69bb (staging: dwc2: simplify register shift expressions) depends on: 
-	  b4f0a76 (staging: dwc2: unshift non-bool register value constants) (proximity)
-	420b4ba (staging: dwc2: remove redundant register reads) depends on: 
-	  e840c95 (staging: dwc2: re-use hptxfsiz variable) (hard)
-	70f5d3f (staging: dwc2: properly mask the GRXFSIZ register) depends on: 
-	  e840c95 (staging: dwc2: re-use hptxfsiz variable) (proximity)
-	  420b4ba (staging: dwc2: remove redundant register reads) (hard)
-	aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time) depends on: 
-	  b4f0a76 (staging: dwc2: unshift non-bool register value constants) (hard)
-	  e6bd5db (staging: dwc2: only read the snpsid register once) (hard)
-	  70f5d3f (staging: dwc2: properly mask the GRXFSIZ register) (hard)
-	51f794e (staging: dwc2: validate the value for phy_utmi_width) depends on: 
-	  aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time) (proximity)
-	f7bafa7 (staging: dwc2: add const to handling of dwc2_core_params) depends on: 
-	  aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time) (proximity)
-
-
-	7e69236 (staging: dwc2: use dwc2_hcd_get_frame_number where possible)                                                 
-	22cbead (staging: dwc2: add helper variable to simplify code)                           X                             
-	b4f0a76 (staging: dwc2: unshift non-bool register value constants)  --------------------'     *           X           
-	e6bd5db (staging: dwc2: only read the snpsid register once)                                   |           X           
-	9637daf (staging: dwc2: remove some device-mode related debug code)                           |           |           
-	26f69bb (staging: dwc2: simplify register shift expressions)  --------------------------------'           |           
-	9e06814 (staging: dwc2: add missing shift)                                                                |           
-	9e3b1d5 (staging: dwc2: simplify debug output in dwc_hc_init)                                             |           
-	e840c95 (staging: dwc2: re-use hptxfsiz variable)                                                     X * |           
-	420b4ba (staging: dwc2: remove redundant register reads)  --------------------------------------------' X |           
-	70f5d3f (staging: dwc2: properly mask the GRXFSIZ register)  -------------------------------------------' X           
-	aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time)  --------------------------' *   *     
-	51f794e (staging: dwc2: validate the value for phy_utmi_width)  --------------------------------------------'   |     
-	5cc9513 (staging: dwc2: make dwc2_core_params documentation more complete)                                      |     
-	f7bafa7 (staging: dwc2: add const to handling of dwc2_core_params)  --------------------------------------------'     
-	730b35b (staging: dwc2: Remove some useless debug prints)                                                             
-	c496aed (staging: dwc2: cleanup includes in pci.c)  
+    $ patchdeps --git 025a9230c8373..91121c103ae93 --list --matrix
+    d6ec53e04bf79 (staging: dwc2: simplify register shift expressions) depends on:
+      f923463335385 (staging: dwc2: unshift non-bool register value constants) (proximity)
+    08b9f9db707ba (staging: dwc2: remove redundant register reads) depends on:
+      c35205aa05124 (staging: dwc2: re-use hptxfsiz variable) (hard)
+    a1fc524393583 (staging: dwc2: properly mask the GRXFSIZ register) depends on:
+      4ab799df6d716 (staging: dwc2: remove specific fifo size constants) (proximity)
+      c35205aa05124 (staging: dwc2: re-use hptxfsiz variable) (proximity)
+      08b9f9db707ba (staging: dwc2: remove redundant register reads) (hard)
+    9badec2f9fa92 (staging: dwc2: interpret all hwcfg and related register at init time) depends on:
+      3b9edf88472e9 (staging: dwc2: fix off-by-one in check for max_packet_count parameter) (hard)
+      f923463335385 (staging: dwc2: unshift non-bool register value constants) (hard)
+      1c58ce133971e (staging: dwc2: only read the snpsid register once) (hard)
+      a1fc524393583 (staging: dwc2: properly mask the GRXFSIZ register) (hard)
+    de4a193193989 (staging: dwc2: validate the value for phy_utmi_width) depends on:
+      9badec2f9fa92 (staging: dwc2: interpret all hwcfg and related register at init time) (proximity)
+    4ab799df6d716 (staging: dwc2: remove specific fifo size constants)  ····················*    
+    3b9edf88472e9 (staging: dwc2: fix off-by-one in check for max_packet_count param  ······│·X  
+    f923463335385 (staging: dwc2: unshift non-bool register value constants)  ··········*···│·X  
+    1c58ce133971e (staging: dwc2: only read the snpsid register once)  ·················│···│·X  
+    d6ec53e04bf79 (staging: dwc2: simplify register shift expressions)  ────────────────┘   │ │  
+    acdb9046b61a6 (staging: dwc2: add missing shift)                                        │ │  
+    57bb8aeda06af (staging: dwc2: simplify debug output in dwc_hc_init)                     │ │  
+    c35205aa05124 (staging: dwc2: re-use hptxfsiz variable)  ·····························X·* │  
+    08b9f9db707ba (staging: dwc2: remove redundant register reads)  ──────────────────────┘·X │  
+    a1fc524393583 (staging: dwc2: properly mask the GRXFSIZ register)  ─────────────────────┘·X  
+    9badec2f9fa92 (staging: dwc2: interpret all hwcfg and related register at init t  ────────┘·*
+    de4a193193989 (staging: dwc2: validate the value for phy_utmi_width)  ──────────────────────┘
+    91121c103ae93 (staging: dwc2: make dwc2_core_params documentation more complete)             
 
 The above uses by-line analysis. A per-file analysis is also available,
 but as you can see below, it is not so useful for this example (since
 there are only a handful of files in the driver, pretty much every patch
 depends on every other patch:
 
-	$ patchdeps --git 6643668..c496aed --depends-matrix --by-file
-	7e69236 (staging: dwc2: use dwc2_hcd_get_frame_number where possible)                 X X   X X   X X X X X X   X     
-	22cbead (staging: dwc2: add helper variable to simplify code)  -----------------------' X   | X   | | | | X |   |     
-	b4f0a76 (staging: dwc2: unshift non-bool register value constants)  --------------------' X X X X X X X X X X   X     
-	e6bd5db (staging: dwc2: only read the snpsid register once)  -----------------------------' | X X | | | | X |   X     
-	9637daf (staging: dwc2: remove some device-mode related debug code)  -----------------------' X | X X X X X X   X     
-	26f69bb (staging: dwc2: simplify register shift expressions)  --------------------------------' X X X X X X X   X     
-	9e06814 (staging: dwc2: add missing shift)  ----------------------------------------------------' | | | | X |   X     
-	9e3b1d5 (staging: dwc2: simplify debug output in dwc_hc_init)  -----------------------------------' X X X X X   X     
-	e840c95 (staging: dwc2: re-use hptxfsiz variable)  -------------------------------------------------' X X X X   X     
-	420b4ba (staging: dwc2: remove redundant register reads)  --------------------------------------------' X X X   X     
-	70f5d3f (staging: dwc2: properly mask the GRXFSIZ register)  -------------------------------------------' X X   X     
-	aad6d16 (staging: dwc2: interpret all hwcfg and related register at init time)  --------------------------' X X X     
-	51f794e (staging: dwc2: validate the value for phy_utmi_width)  --------------------------------------------' X X X X 
-	5cc9513 (staging: dwc2: make dwc2_core_params documentation more complete)  ----------------------------------' | | | 
-	f7bafa7 (staging: dwc2: add const to handling of dwc2_core_params)  --------------------------------------------' X X 
-	730b35b (staging: dwc2: Remove some useless debug prints)  -------------------------------------------------------' X 
-	c496aed (staging: dwc2: cleanup includes in pci.c)  ----------------------------------------------------------------' 
+    $ patchdeps --git 025a9230c8373..91121c103ae93 --matrix --by-file
+    4ab799df6d716 (staging: dwc2: remove specific fifo size constants)  ················X·············X···X  
+    3b9edf88472e9 (staging: dwc2: fix off-by-one in check for max_packet_count param  ··X···X···X·X·X·X·X·X  
+    f923463335385 (staging: dwc2: unshift non-bool register value constants)  ──────────┘·X·X·X·X·X·X·X·X·X  
+    1c58ce133971e (staging: dwc2: only read the snpsid register once)  ───────────────────┘·X·X·│·│·│·│·X │  
+    d6ec53e04bf79 (staging: dwc2: simplify register shift expressions)  ────────────────────┘·X·X·X·X·X·X·X  
+    acdb9046b61a6 (staging: dwc2: add missing shift)  ────────────────────────────────────────┘·│·│·│·│·X │  
+    57bb8aeda06af (staging: dwc2: simplify debug output in dwc_hc_init)  ───────────────────────┘·X·X·X·X·X  
+    c35205aa05124 (staging: dwc2: re-use hptxfsiz variable)  ─────────────────────────────────────┘·X·X·X·X  
+    08b9f9db707ba (staging: dwc2: remove redundant register reads)  ────────────────────────────────┘·X·X·X  
+    a1fc524393583 (staging: dwc2: properly mask the GRXFSIZ register)  ───────────────────────────────┘·X·X  
+    9badec2f9fa92 (staging: dwc2: interpret all hwcfg and related register at init t  ──────────────────┘·X·X
+    de4a193193989 (staging: dwc2: validate the value for phy_utmi_width)  ────────────────────────────────┘·X
+    91121c103ae93 (staging: dwc2: make dwc2_core_params documentation more complete)  ──────────────────────┘
 
 Copyright & License
 -------------------

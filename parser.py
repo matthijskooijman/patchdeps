@@ -25,34 +25,49 @@
 # This file is based on the unidiff library by Matías Bordese (at
 # https://github.com/matiasb/python-unidiff)
 
+# A "Changeset" consists of multiple "PatchFiles" / commits (GitRev)
+# A single patch(-file)/commit affects a "set of PatchedFiles"
+# For each "PatchedFile" the patch consists of multiple "Hunks"
+# Each "Hunk" concists of multiple "Lines" being "context or change" (LineType)
+
+from __future__ import annotations
+
 import re
-import itertools
+from enum import Enum
+from typing import Any, Iterable, Iterator
 
 RE_SOURCE_FILENAME = re.compile(r'^--- (?P<filename>[^\t]+)')
 RE_TARGET_FILENAME = re.compile(r'^\+\+\+ (?P<filename>[^\t]+)')
 
 # @@ (source offset, length) (target offset, length) @@
 RE_HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))?\ @@")
-
-#   kept line (context)
-# + added line
-# - deleted line
-# \ No newline case (ignore)
 RE_HUNK_BODY_LINE = re.compile(r'^([- \+\\])')
 
-LINE_TYPE_ADD = '+'
-LINE_TYPE_DELETE= '-'
-LINE_TYPE_CONTEXT = ' '
 
-class UnidiffParseException(Exception):
+class LineType(Enum):
+    ADD = '+'  # added line
+    DELETE= '-'  # deleted line
+    CONTEXT = ' '  # kept line (context)
+    IGNORE = '\\'  # No newline case (ignore)
+
+
+class UnidiffParseError(Exception):
     pass
 
-class Change(object):
+
+class Line:
     """
     A single line from a patch hunk.
     """
-    def __init__(self, hunk, action, source_lineno_rel, source_line,
-                 target_lineno_rel, target_line):
+    def __init__(
+        self,
+        hunk: Hunk,
+        action: LineType,
+        source_lineno_rel: int,
+        source_line: str | None,
+        target_lineno_rel: int,
+        target_line: str | None,
+    ) -> None:
         """
         The line numbers must always be present, either source_line or
         target_line can be None depending on the action.
@@ -64,19 +79,17 @@ class Change(object):
         self.target_lineno_rel = target_lineno_rel
         self.target_line = target_line
 
-        self.source_lineno_abs =  self.hunk.source_start + self.source_lineno_rel
-        self.target_lineno_abs =  self.hunk.target_start + self.target_lineno_rel
+        self.source_lineno_abs = self.hunk.source_start + self.source_lineno_rel
+        self.target_lineno_abs = self.hunk.target_start + self.target_lineno_rel
 
-    def __str__(self):
-        return "(-%s, +%s) %s%s" % (self.source_lineno_abs,
-                                    self.target_lineno_abs,
-                                    self.action,
-                                    self.source_line or self.target_line)
+    def __str__(self) -> str:
+        return f"(-{self.source_lineno_abs}, +{self.target_lineno_abs}) {self.action}{self.source_line or self.target_line}"
 
-class PatchedFile(list):
+
+class PatchedFile(list["Hunk"]):
     """Data from a patched file."""
 
-    def __init__(self, source='', target=''):
+    def __init__(self, source: str = '', target: str = '') -> None:
         self.source_file = source
         self.target_file = target
 
@@ -89,80 +102,81 @@ class PatchedFile(list):
         else:
             self.path = self.source_file
 
-class Hunk(object):
+
+class Hunk:
     """Each of the modified blocks of a file."""
 
-    def __init__(self, src_start=0, src_len=0, tgt_start=0, tgt_len=0):
-        self.source_start = int(src_start)
-        self.source_length = int(src_len)
-        self.target_start = int(tgt_start)
-        self.target_length = int(tgt_len)
-        self.changes = []
-        self.to_parse = [self.source_length, self.target_length]
+    def __init__(self, src_start: int = 0, src_len: int = 0, tgt_start: int = 0, tgt_len: int = 0) -> None:
+        self.source_start = src_start
+        self.source_length = self.source_todo = src_len
+        self.target_start = tgt_start
+        self.target_length = self.target_todo = tgt_len
+        self.changes: list[Line] = []
 
-    def is_valid(self):
+    def is_valid(self) -> bool:
         """Check hunk header data matches entered lines info."""
-        return self.to_parse == [0, 0]
+        return self.source_todo == self.target_todo == 0
 
-    def append_change(self, change):
-        """
-        Append a Change
-        """
-        self.changes.append(change)
+    def append_line(self, line: Line) -> None:
+        """Append a line."""
+        self.changes.append(line)
 
-        if (change.action == LINE_TYPE_CONTEXT or
-            change.action == LINE_TYPE_DELETE):
-                self.to_parse[0] -= 1
-                if self.to_parse[0] < 0:
-                    raise UnidiffParseException(
-                        'To many source lines in hunk: %s' % self)
+        if line.action in {LineType.CONTEXT, LineType.DELETE}:
+            self.source_todo -= 1
+            if self.source_todo < 0:
+                raise UnidiffParseError(
+                    f'Too many source lines in hunk: {self}')
 
-        if (change.action == LINE_TYPE_CONTEXT or
-            change.action == LINE_TYPE_ADD):
-                self.to_parse[1] -= 1
-                if self.to_parse[1] < 0:
-                    raise UnidiffParseException(
-                        'To many target lines in hunk: %s' % self)
+        if line.action in {LineType.CONTEXT, LineType.ADD}:
+            self.target_todo -= 1
+            if self.target_todo < 0:
+                raise UnidiffParseError(
+                    f'Too many target lines in hunk: {self}')
 
-    def __str__(self):
-        return "<@@ %d,%d %d,%d @@>" % (self.source_start, self.source_length,
-                                        self.target_start, self.target_length)
+    def __str__(self) -> str:
+        return f"<@@ {self.source_start},{self.source_length} {self.target_start},{self.target_length} @@>"
 
 
-def _parse_hunk(diff, source_start, source_len, target_start, target_len):
+def _parse_hunk(
+    diff: Iterator[str],
+    source_start: int,
+    source_len: int,
+    target_start: int,
+    target_len: int,
+) -> Hunk:
     hunk = Hunk(source_start, source_len, target_start, target_len)
-    modified = 0
-    deleting = 0
     source_lineno = 0
     target_lineno = 0
 
     for line in diff:
         valid_line = RE_HUNK_BODY_LINE.match(line)
         if valid_line:
-            action = valid_line.group(0)
+            action = LineType(valid_line.group(0))
             original_line = line[1:]
 
-            kwargs = dict(action = action,
-                          hunk = hunk,
-                          source_lineno_rel = source_lineno,
-                          target_lineno_rel = target_lineno,
-                          source_line = None,
-                          target_line = None)
+            kwargs: dict[str, Any] = {
+                "action": action,
+                "hunk": hunk,
+                "source_lineno_rel": source_lineno,
+                "target_lineno_rel": target_lineno,
+                "source_line": None,
+                "target_line": None,
+            }
 
-            if action == LINE_TYPE_ADD:
+            if action == LineType.ADD:
                 kwargs['target_line'] = original_line
                 target_lineno += 1
-            elif action == LINE_TYPE_DELETE:
+            elif action == LineType.DELETE:
                 kwargs['source_line'] = original_line
                 source_lineno += 1
-            elif action == LINE_TYPE_CONTEXT:
+            elif action == LineType.CONTEXT:
                 kwargs['source_line'] = original_line
                 kwargs['target_line'] = original_line
                 source_lineno += 1
                 target_lineno += 1
-            hunk.append_change(Change(**kwargs))
+            hunk.append_line(Line(**kwargs))
         else:
-            raise UnidiffParseException('Hunk diff data expected: ' + line)
+            raise UnidiffParseError(f'Hunk diff data expected: {line}')
 
         # check hunk len(old_lines) and len(new_lines) are ok
         if hunk.is_valid():
@@ -171,38 +185,31 @@ def _parse_hunk(diff, source_start, source_len, target_start, target_len):
     return hunk
 
 
-def parse_diff(diff):
-    ret = []
-    current_file = None
+def parse_diff(diff: Iterable[str]) -> list[PatchedFile]:
+    ret: list[PatchedFile] = []
+
     # Make sure we only iterate the diff once, instead of restarting
     # from the top inside _parse_hunk
-    diff = itertools.chain(diff)
-
-    for line in diff:
-        # check for source file header
-        check_source = RE_SOURCE_FILENAME.match(line)
-        if check_source:
-            source_file = check_source.group('filename')
-            current_file = None
-            continue
-
-        # check for target file header
-        check_target = RE_TARGET_FILENAME.match(line)
-        if check_target:
-            target_file = check_target.group('filename')
+    lines = iter(diff)
+    for line in lines:
+        if m := RE_SOURCE_FILENAME.match(line):
+            source_file = m['filename']
+        elif m := RE_TARGET_FILENAME.match(line):
+            target_file = m['filename']
             current_file = PatchedFile(source_file, target_file)
             ret.append(current_file)
-            continue
-
-        # check for hunk header
-        re_hunk_header = RE_HUNK_HEADER.match(line)
-        if re_hunk_header:
-            hunk_info = list(re_hunk_header.groups())
-            # If the hunk length is 1, it is sometimes left out
-            for i in (1, 3):
-                if hunk_info[i] is None:
-                    hunk_info[i] = 1
-            hunk = _parse_hunk(diff, *hunk_info)
+        elif m := RE_HUNK_HEADER.match(line):
+            hunk = _parse_hunk(
+                lines,
+                int(m[1]),
+                _int1(m[2]),
+                int(m[3]),
+                _int1(m[4]),
+            )
             current_file.append(hunk)
+
     return ret
 
+
+def _int1(s: str) -> int:
+    return 1 if s is None else int(s)
